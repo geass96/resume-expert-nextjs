@@ -1,0 +1,10 @@
+[Unit]
+Description=Backup Resume Expert history SQLite safely
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/bash /usr/local/sbin/resume-expert-backup
+NoNewPrivileges=true
+PrivateTmp=true

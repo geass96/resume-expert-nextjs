@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Resume Expert history snapshot
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=900
+Persistent=true
+Unit=resume-expert-history-backup.service
+
+[Install]
+WantedBy=timers.target

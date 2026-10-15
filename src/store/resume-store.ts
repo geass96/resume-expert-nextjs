@@ -46,7 +46,7 @@ interface ResumeStore {
   rejectProposal: (id: string) => void;
   updateDraft: (path: string, text: string) => void;
   addBullet: (id: string, path: string, text: string) => void;
-  restoreVersion: (snapshot: FinalResume, versionId: string, profileId: string, jobId: string) => void;
+  restoreVersion: (snapshot: FinalResume, versionId: string, profileId: string, jobId: string, role?: string) => void;
   markSaved: (versionId: string, profileId: string, jobId: string) => void;
   setAnalysisError: (error: string | null) => void;
   setAiMode: (mode: AIMode | null) => void;
@@ -195,10 +195,11 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
       decision:"accepted",fieldPath:path,text,at:new Date().toISOString()
     }}};
   }),
-  restoreVersion:(snapshot,versionId,profileId,jobId)=>set({
+  restoreVersion:(snapshot,versionId,profileId,jobId,role)=>set((state)=>({
     draftResume:structuredClone(snapshot),analysisResult:null,proposalDecisions:{},
+    userInput:{...state.userInput,targetRole:role||state.userInput.targetRole},
     parentVersionId:versionId,currentProfileId:profileId,currentJobId:jobId,currentStep:"final-resume"
-  }),
+  })),
   markSaved:(versionId,profileId,jobId)=>set({parentVersionId:versionId,currentProfileId:profileId,currentJobId:jobId}),
 
   setAnalysisError: (error) => set({ analysisError: error }),
@@ -244,7 +245,7 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     }
 
     if(step==="history") return currentStep==="history"?"active":"pending";
-    if(!analysisResult && (step==="final-resume" || step==="export") && get().draftResume)
+    if(!analysisResult && (step==="final-resume" || step==="export" || step==="interview") && get().draftResume)
       return currentStep===step?"active":"pending";
     if (!analysisResult) return "disabled";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, ListSection, SectionTitle } from "@/components/shared/ui-helpers";
@@ -14,6 +14,18 @@ export function InterviewStep() {
   const [introError,setIntroError]=useState("");
   const [introMode,setIntroMode]=useState("");
   const [introBusy,setIntroBusy]=useState(false);
+  useEffect(()=>{
+    if(!parentVersionId)return;
+    let active=true;
+    fetch("/api/introduction?versionId="+encodeURIComponent(parentVersionId)+"&duration="+duration,{cache:"no-store"})
+      .then(r=>r.json()).then(data=>{
+        if(active && data.introduction){
+          setIntroduction(data.introduction.content||"");
+          setIntroMode(data.introduction.model||"");
+        }
+      }).catch(()=>{});
+    return ()=>{active=false;};
+  },[parentVersionId,duration]);
   async function intro(generate:boolean){
     if(!parentVersionId)return;
     setIntroBusy(true);setIntroError("");

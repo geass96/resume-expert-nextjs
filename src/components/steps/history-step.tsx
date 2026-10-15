@@ -42,7 +42,7 @@ export function HistoryStep() {
   const json=await response.json();setRows(json.versions);
  },[]);
  useEffect(()=>{fetch("/api/history",{cache:"no-store"}).then(r=>r.json()).then(d=>setRows(d.versions||[])).catch(e=>setError(e.message));},[]);
- 
+
  async function save(){
   if(!draftResume)return;
   setWorking(true);setError("");setMessage("");
@@ -72,7 +72,7 @@ export function HistoryStep() {
   const response=await fetch("/api/history/"+encodeURIComponent(id),{cache:"no-store"});
   const data=await response.json();
   if(!response.ok){setError(data.error||"恢复失败");return;}
-  restoreVersion(data.snapshot,data.id,data.profileId,data.jobId);
+  restoreVersion(data.snapshot,data.id,data.profileId,data.jobId,data.role);
   setCurrentStep("final-resume");
  }
  async function remove(id:string){
