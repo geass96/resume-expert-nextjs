@@ -5,6 +5,7 @@ import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { fetchAIStatus } from "@/services/ai/resumeAgent";
 import { useResumeStore } from "@/store/resume-store";
+import { clearLocalDraft } from "@/components/layout/draft-recovery";
 
 export function TopNav() {
   const { aiMode, setAiMode } = useResumeStore();
@@ -46,7 +47,7 @@ export function TopNav() {
       <div className="flex items-center gap-3">
         <p className="hidden text-xs text-neutral-400 sm:block">JD · 诊断 · 优化 · 历史</p>
         <button type="button" className="text-xs text-neutral-600 underline"
-          onClick={async()=>{await fetch("/api/auth/logout",{method:"POST"});window.location.replace("/login");}}>退出登录</button>
+          onClick={async()=>{const response=await fetch("/api/auth/logout",{method:"POST"});if(response.ok){await clearLocalDraft().catch(()=>{});window.location.replace("/login");}}}>退出登录</button>
       </div>
     </header>
   );

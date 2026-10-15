@@ -3,11 +3,13 @@
 import { StepSidebar } from "@/components/layout/step-sidebar";
 import { TopNav } from "@/components/layout/top-nav";
 import { StepContent } from "@/components/steps/step-content";
+import { DraftRecovery } from "@/components/layout/draft-recovery";
 
 export function AppShell() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <TopNav />
+      <DraftRecovery />
       <div className="flex flex-1 overflow-hidden">
         <StepSidebar />
         <main className="flex-1 overflow-y-auto">

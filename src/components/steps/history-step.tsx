@@ -8,20 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionTitle } from "@/components/shared/ui-helpers";
 import type { FinalResume } from "@/types/resume";
+import { compareResumeVersions } from "@/lib/version-diff";
 
 type Summary = {
  id:string;jobId:string;profileId:string;company:string;role:string;profileTitle:string;
  versionNo:number;label:string;createdAt:string;parentVersionId:string|null;contentHash:string;
 };
 type Saved = Summary & {snapshot:FinalResume;decisions:Record<string,unknown>;note:string};
-const textFor = (resume:FinalResume) => [
- "求职方向："+resume.jobIntent,"职业摘要："+resume.summary,
- "核心技能："+resume.coreSkills.join("、"),
- ...resume.workExperience.flatMap(x=>[x.company+" · "+x.role,...x.bullets.map(b=>"  • "+b)]),
- ...resume.projectExperience.flatMap(x=>[x.name+" · "+x.role,...x.bullets.map(b=>"  • "+b)]),
- "技能工具："+resume.skillsAndTools.join("、"),
- "教育："+resume.education.school+" "+resume.education.degree
-];
 export function HistoryStep() {
  const {draftResume,userInput,proposalDecisions,parentVersionId,currentJobId,currentProfileId,markSaved,restoreVersion,setCurrentStep}=useResumeStore();
  const [rows,setRows]=useState<Summary[]>([]);
@@ -49,7 +42,7 @@ export function HistoryStep() {
   try{
    const response=await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({profileId:currentProfileId||undefined,jobId:currentJobId||undefined,
-      parentVersionId:parentVersionId||undefined,profileTitle,company,role,
+      parentVersionId:parentVersionId||undefined,profileTitle,company,role:role||userInput.targetRole,
       jdText:userInput.jobDescription,label,note,snapshot:draftResume,decisions:proposalDecisions})});
    const result=await response.json();
    if(!response.ok)throw Error(result.error||"保存失败");
@@ -80,8 +73,7 @@ export function HistoryStep() {
   const r=await fetch("/api/history/"+id,{method:"DELETE"});
   if(r.ok){await refresh();setComparison(null);}else setError("删除失败");
  }
- const aa=comparison?textFor(comparison.a.snapshot):[];
- const bb=comparison?textFor(comparison.b.snapshot):[];
+ const changes=comparison?compareResumeVersions(comparison.a.snapshot,comparison.b.snapshot):[];
  return <div className="space-y-6">
   <SectionTitle title="历史简历与版本对比" description="按岗位保存不可变版本；对比历史、恢复为新草稿，不覆盖旧版本" />
   {error&&<p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -91,12 +83,12 @@ export function HistoryStep() {
     <div className="grid grid-cols-2 gap-3">
      <div><Label htmlFor="profile">主简历名称</Label><Input id="profile" value={profileTitle} onChange={e=>setProfileTitle(e.target.value)} /></div>
      <div><Label htmlFor="company">目标公司</Label><Input id="company" value={company} onChange={e=>setCompany(e.target.value)} placeholder="可留空" /></div>
-     <div><Label htmlFor="role">目标岗位</Label><Input id="role" value={role} onChange={e=>setRole(e.target.value)}/></div>
+     <div><Label htmlFor="role">目标岗位</Label><Input id="role" value={role||userInput.targetRole} onChange={e=>setRole(e.target.value)}/></div>
      <div><Label htmlFor="label">版本标记</Label><Input id="label" value={label} onChange={e=>setLabel(e.target.value)} placeholder="例：AI 产品经理投递版"/></div>
     </div>
     <Label htmlFor="memo">版本备注</Label>
     <Input id="memo" value={note} onChange={e=>setNote(e.target.value)} placeholder="本轮修改说明"/>
-    <Button disabled={!draftResume||!role.trim()||working} onClick={()=>void save()}>{working?"处理中":"确认定稿并保存版本"}</Button>
+    <Button disabled={!draftResume||!(role||userInput.targetRole).trim()||working} onClick={()=>void save()}>{working?"处理中":"确认定稿并保存版本"}</Button>
     {parentVersionId&&<p className="text-xs text-neutral-500">当前草稿继承历史版本：{parentVersionId.slice(0,8)}</p>}
    </CardContent></Card>
   <Card><CardHeader><CardTitle>保存的历史版本（{rows.length}）</CardTitle></CardHeader><CardContent>
@@ -124,14 +116,36 @@ export function HistoryStep() {
     </label>
    </div>
    <Button size="sm" variant="outline" disabled={!left||!right||left===right||working} onClick={()=>void compare()}>比较差异</Button>
-   {comparison&&<div className="grid grid-cols-2 gap-3">
-    {([aa,bb] as string[][]).map((lines,i)=><div key={i} className="border rounded p-3 space-y-1 min-w-0">
-      <h3 className="font-semibold text-sm">版本 {i===0?"A":"B"} · V{i===0?comparison.a.versionNo:comparison.b.versionNo}</h3>
-      {lines.map((line,j)=><p key={j} className={"text-xs whitespace-pre-wrap break-words p-1 rounded "+(line !== (i===0?bb:aa)[j]?"bg-amber-50 font-medium":"")}>{line}</p>)}
-    </div>)}
+   {comparison&&<div className="space-y-3" aria-live="polite">
+     <p className="text-sm font-medium">
+       版本 A（V{comparison.a.versionNo}）→ 版本 B（V{comparison.b.versionNo}），
+       {changes.length} 处差异
+     </p>
+     {!changes.length&&<p className="text-sm text-neutral-500">两个版本内容完全一致。</p>}
+     {changes.map(change=>(
+       <div key={change.key} className="border rounded-lg p-3 space-y-2">
+         <div className="flex items-center gap-2">
+           <span className={"text-xs font-semibold rounded px-2 py-1 "+(
+             change.kind==="added"?"bg-green-100 text-green-800":
+             change.kind==="removed"?"bg-red-100 text-red-800":"bg-amber-100 text-amber-800"
+           )}>{change.kind==="added"?"新增":change.kind==="removed"?"删除":"修改"}</span>
+           <span className="text-sm font-medium break-all">{change.label}</span>
+         </div>
+         <div className="grid grid-cols-2 gap-3">
+           <div className="rounded bg-neutral-50 p-2 min-w-0">
+             <p className="text-xs font-semibold mb-1">版本 A · 修改前</p>
+             <p className="text-xs whitespace-pre-wrap break-words">{change.before||"（无）"}</p>
+           </div>
+           <div className="rounded bg-blue-50 p-2 min-w-0">
+             <p className="text-xs font-semibold mb-1">版本 B · 修改后</p>
+             <p className="text-xs whitespace-pre-wrap break-words">{change.after||"（无）"}</p>
+           </div>
+         </div>
+       </div>
+     ))}
    </div>}
    {comparison&&<div className="text-xs text-neutral-600 space-y-2">
-      <p>黄色区域表示对应行存在差异。版本快照不会被对比操作修改。</p>
+      <p>下方为版本 B 的人工决策记录。差异对比仅对读取的版本快照进行计算，不修改历史数据。</p>
       <p>版本 B 修改记录（人工确认后保存）：</p>
       {Object.entries(comparison.b.decisions).length === 0 ? <p>本版本没有独立的建议决策记录。</p> :
        Object.entries(comparison.b.decisions).map(([id,record])=>{
