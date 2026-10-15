@@ -9,13 +9,13 @@ import { EmptyState, SectionTitle } from "@/components/shared/ui-helpers";
 import { useResumeStore } from "@/store/resume-store";
 
 export function FinalResumeStep() {
-  const { analysisResult, setCurrentStep } = useResumeStore();
+  const { analysisResult, draftResume, updateDraft, setCurrentStep } = useResumeStore();
 
-  if (!analysisResult) {
+  if (!draftResume && !analysisResult) {
     return <EmptyState message="请先完成输入材料并开始分析" />;
   }
 
-  const { finalResume } = analysisResult;
+  const finalResume = draftResume ?? analysisResult!.finalResume;
   const { personalInfo } = finalResume;
 
   return (
@@ -25,6 +25,10 @@ export function FinalResumeStep() {
         description="基于分析与优化生成的完整简历"
       />
 
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-xs text-neutral-500">当前是可编辑草稿。修改完成后请到“历史版本”定稿保存，历史记录不会被覆盖。</p>
+        <Button size="sm" onClick={() => setCurrentStep("history")}>保存新版本</Button>
+      </div>
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="mb-4">
@@ -47,7 +51,9 @@ export function FinalResumeStep() {
             <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">
               职业摘要
             </h4>
-            <p className="text-sm leading-relaxed text-neutral-700">{finalResume.summary}</p>
+            <textarea aria-label="编辑职业摘要" value={finalResume.summary}
+              onChange={e=>updateDraft("summary",e.target.value)}
+              className="w-full min-h-24 border rounded-md p-2 text-sm leading-relaxed" />
           </section>
 
           <section className="mb-5">
@@ -80,7 +86,9 @@ export function FinalResumeStep() {
                     {w.bullets.map((b, i) => (
                       <li key={i} className="flex gap-2 text-sm text-neutral-600">
                         <span className="text-neutral-300">•</span>
-                        <span>{b}</span>
+                        <textarea aria-label={"编辑工作经历 "+w.company+" 条目 "+(i+1)}
+                          value={b} onChange={e=>updateDraft("work:"+finalResume.workExperience.indexOf(w)+":"+i,e.target.value)}
+                          className="w-full border rounded-md p-2 text-sm" rows={2} />
                       </li>
                     ))}
                   </ul>
@@ -106,7 +114,9 @@ export function FinalResumeStep() {
                     {p.bullets.map((b, i) => (
                       <li key={i} className="flex gap-2 text-sm text-neutral-600">
                         <span className="text-neutral-300">•</span>
-                        <span>{b}</span>
+                        <textarea aria-label={"编辑项目经历 "+p.name+" 条目 "+(i+1)}
+                          value={b} onChange={e=>updateDraft("project:"+finalResume.projectExperience.indexOf(p)+":"+i,e.target.value)}
+                          className="w-full border rounded-md p-2 text-sm" rows={2} />
                       </li>
                     ))}
                   </ul>

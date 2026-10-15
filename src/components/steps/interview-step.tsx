@@ -1,19 +1,35 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, ListSection, SectionTitle } from "@/components/shared/ui-helpers";
 import { useResumeStore } from "@/store/resume-store";
 
 export function InterviewStep() {
-  const { analysisResult, setCurrentStep } = useResumeStore();
-
-  if (!analysisResult) {
+  const { analysisResult, draftResume, parentVersionId, setCurrentStep } = useResumeStore();
+  const [duration,setDuration]=useState(1);
+  const [introduction,setIntroduction]=useState("");
+  const [introError,setIntroError]=useState("");
+  const [introMode,setIntroMode]=useState("");
+  const [introBusy,setIntroBusy]=useState(false);
+  async function intro(generate:boolean){
+    if(!parentVersionId)return;
+    setIntroBusy(true);setIntroError("");
+    try{
+      const response=await fetch("/api/introduction",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({versionId:parentVersionId,duration,...(!generate?{content:introduction}:{})})});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error||"操作失败");
+      setIntroduction(data.content);setIntroMode(data.mode);
+    }catch(e){setIntroError((e as Error).message);}finally{setIntroBusy(false);}
+  }
+  if (!draftResume && !analysisResult) {
     return <EmptyState message="请先完成输入材料并开始分析" />;
   }
 
-  const { interviewPrep } = analysisResult;
+  const interviewPrep = analysisResult?.interviewPrep;
 
   return (
     <div>
@@ -24,14 +40,28 @@ export function InterviewStep() {
 
       <Card className="mb-4">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">自我介绍</CardTitle>
+          <CardTitle className="text-sm">自我介绍（基于已保存定稿版）</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm leading-relaxed text-neutral-700">{interviewPrep.selfIntroduction}</p>
+          {parentVersionId ? <div className="space-y-3">
+            <p className="text-xs text-neutral-500">基于定稿版本 {parentVersionId.slice(0,8)}。简历草稿发生新修改时请先另存版本，再重新生成。</p>
+            <select aria-label="自我介绍时长" value={duration} onChange={e=>{setDuration(Number(e.target.value));setIntroduction("");}} className="border rounded p-2 text-sm">
+              <option value={1}>1 分钟</option><option value={3}>3 分钟</option>
+            </select>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={introBusy} onClick={()=>void intro(true)}>重新生成</Button>
+              <Button variant="outline" size="sm" disabled={introBusy||!introduction.trim()} onClick={()=>void intro(false)}>保存人工修改</Button>
+            </div>
+            {introMode==="mock"&&<p className="text-xs text-amber-700">当前为 Mock 示例草稿，不代表真实 AI 生成。</p>}
+            {introError&&<p role="alert" className="text-red-700 text-sm">{introError}</p>}
+            <textarea aria-label="编辑自我介绍" value={introduction} onChange={e=>setIntroduction(e.target.value)}
+              className="w-full min-h-32 border rounded p-3 text-sm" placeholder="生成或手动输入自我介绍"/>
+          </div> : <p className="text-sm text-neutral-500">先前往“历史版本”保存定稿，再生成与当前版本匹配的介绍。</p>}
+          {!parentVersionId && interviewPrep && <p className="mt-3 text-sm text-neutral-600">首次分析草稿：{interviewPrep.selfIntroduction}</p>}
         </CardContent>
       </Card>
 
-      <Card className="mb-4">
+      {interviewPrep && <><Card className="mb-4">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">可能追问（10 题）</CardTitle>
         </CardHeader>
@@ -85,6 +115,7 @@ export function InterviewStep() {
         </Card>
       </div>
 
+      </>}
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => setCurrentStep("export")}>
           下一步：导出结果

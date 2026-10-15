@@ -43,9 +43,11 @@ export function TopNav() {
           </Badge>
         )}
       </div>
-      <p className="hidden text-xs text-neutral-400 sm:block">
-        基于目标岗位 JD · 诊断 · 匹配 · 优化 · 面试准备
-      </p>
+      <div className="flex items-center gap-3">
+        <p className="hidden text-xs text-neutral-400 sm:block">JD · 诊断 · 优化 · 历史</p>
+        <button type="button" className="text-xs text-neutral-600 underline"
+          onClick={async()=>{await fetch("/api/auth/logout",{method:"POST"});window.location.replace("/login");}}>退出登录</button>
+      </div>
     </header>
   );
 }

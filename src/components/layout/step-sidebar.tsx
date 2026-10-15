@@ -27,6 +27,7 @@ const STEPS: { id: StepId; label: string; icon: React.ElementType }[] = [
   { id: "final-resume", label: "最终简历", icon: ClipboardList },
   { id: "interview", label: "面试准备", icon: Brain },
   { id: "export", label: "导出结果", icon: Download },
+  { id: "history", label: "历史版本", icon: ClipboardList },
 ];
 
 export function StepSidebar() {

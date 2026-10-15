@@ -64,6 +64,7 @@ async function callChatCompletions(
 ) {
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(90000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
@@ -81,13 +82,7 @@ async function callChatCompletions(
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new LLMError(
-      detail
-        ? `大模型请求失败 (${response.status}): ${detail.slice(0, 300)}`
-        : `大模型请求失败 (${response.status})`,
-      response.status
-    );
+    throw new LLMError("大模型请求失败，状态码 " + response.status, response.status);
   }
 
   return (await response.json()) as {

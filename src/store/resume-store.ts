@@ -5,6 +5,7 @@ import type {
   StepId,
   StepStatus,
   UserInput,
+  FinalResume,
 } from "@/types/resume";
 import type { AIMode } from "@/lib/ai/types";
 
@@ -25,6 +26,11 @@ interface ResumeStore {
   currentStep: StepId;
   isAnalyzing: boolean;
   analysisResult: AnalysisResult | null;
+  draftResume: FinalResume | null;
+  proposalDecisions: Record<string, { decision: "accepted" | "rejected" | "edited"; fieldPath: string; text: string; at: string }>;
+  currentProfileId: string;
+  currentJobId: string;
+  parentVersionId: string;
   analysisError: string | null;
   aiMode: AIMode | null;
   optimizeStyle: OptimizeStyle;
@@ -35,6 +41,13 @@ interface ResumeStore {
   setCurrentStep: (step: StepId) => void;
   setAnalyzing: (analyzing: boolean) => void;
   setAnalysisResult: (result: AnalysisResult) => void;
+  setOptimizedItems: (items: AnalysisResult["optimizedItems"]) => void;
+  applyProposal: (id: string, path: string, text: string, edited?: boolean) => void;
+  rejectProposal: (id: string) => void;
+  updateDraft: (path: string, text: string) => void;
+  addBullet: (id: string, path: string, text: string) => void;
+  restoreVersion: (snapshot: FinalResume, versionId: string, profileId: string, jobId: string) => void;
+  markSaved: (versionId: string, profileId: string, jobId: string) => void;
   setAnalysisError: (error: string | null) => void;
   setAiMode: (mode: AIMode | null) => void;
   setOptimizeStyle: (style: OptimizeStyle) => void;
@@ -60,6 +73,11 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
   currentStep: "input",
   isAnalyzing: false,
   analysisResult: null,
+  draftResume: null,
+  proposalDecisions: {},
+  currentProfileId: "",
+  currentJobId: "",
+  parentVersionId: "",
   analysisError: null,
   aiMode: null,
   optimizeStyle: "ai-product",
@@ -135,7 +153,53 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
 
   setAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
 
-  setAnalysisResult: (result) => set({ analysisResult: result, analysisError: null }),
+  setAnalysisResult: (result) => set({
+    analysisResult: result, draftResume: structuredClone(result.finalResume),
+    proposalDecisions: {}, currentProfileId:"",currentJobId:"",parentVersionId:"",
+    analysisError: null
+  }),
+  setOptimizedItems: (items) => set((state) => state.analysisResult
+    ? {analysisResult:{...state.analysisResult,optimizedItems:items},proposalDecisions:{}}
+    : {}),
+  updateDraft: (path,text) => set((state) => {
+    if(!state.draftResume)return {};
+    const draft=structuredClone(state.draftResume);
+    if(!writeDraft(draft,path,text))return {};
+    const decisions={...state.proposalDecisions};
+    for(const [id,proposal] of Object.entries(decisions)) {
+      if(proposal.fieldPath===path && proposal.decision==="accepted")
+        decisions[id]={...proposal,decision:"edited",text,at:new Date().toISOString()};
+    }
+    return {draftResume:draft,proposalDecisions:decisions};
+  }),
+  applyProposal: (id,path,text,edited=false) => set((state)=>{
+    if(!state.draftResume)return {};
+    const draft=structuredClone(state.draftResume);
+    if(!writeDraft(draft,path,text))return {};
+    return {draftResume:draft,proposalDecisions:{...state.proposalDecisions,[id]:{
+      decision:edited?"edited":"accepted",fieldPath:path,text,at:new Date().toISOString()
+    }}};
+  }),
+  rejectProposal: (id)=>set((state)=>({proposalDecisions:{...state.proposalDecisions,[id]:{
+    decision:"rejected",fieldPath:"",text:"",at:new Date().toISOString()
+  }}})),
+  addBullet: (id,path,text)=>set((state)=>{
+    if(!state.draftResume||!text.trim())return {};
+    const draft=structuredClone(state.draftResume);
+    const match=/^(work|project):(\d+)$/.exec(path);
+    if(!match)return {};
+    const list=match[1]==="work"?draft.workExperience:draft.projectExperience;
+    if(!list[Number(match[2])])return {};
+    list[Number(match[2])].bullets.push(text.trim());
+    return {draftResume:draft,proposalDecisions:{...state.proposalDecisions,[id]:{
+      decision:"accepted",fieldPath:path,text,at:new Date().toISOString()
+    }}};
+  }),
+  restoreVersion:(snapshot,versionId,profileId,jobId)=>set({
+    draftResume:structuredClone(snapshot),analysisResult:null,proposalDecisions:{},
+    parentVersionId:versionId,currentProfileId:profileId,currentJobId:jobId,currentStep:"final-resume"
+  }),
+  markSaved:(versionId,profileId,jobId)=>set({parentVersionId:versionId,currentProfileId:profileId,currentJobId:jobId}),
 
   setAnalysisError: (error) => set({ analysisError: error }),
 
@@ -179,6 +243,9 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
       return analysisResult ? "completed" : "pending";
     }
 
+    if(step==="history") return currentStep==="history"?"active":"pending";
+    if(!analysisResult && (step==="final-resume" || step==="export") && get().draftResume)
+      return currentStep===step?"active":"pending";
     if (!analysisResult) return "disabled";
 
     if (stepIndex < currentIndex) return "completed";
@@ -188,3 +255,16 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
 
   setCopied: (copied) => set({ copied }),
 }));
+
+
+// Field paths are generated from explicit visible fields, never inferred from LLM strings.
+function writeDraft(draft:FinalResume,path:string,text:string):boolean {
+ if(path==="summary"){draft.summary=text;return true;}
+ const match=/^(work|project):(\d+):(\d+)$/.exec(path);
+ if(!match)return false;
+ const list=match[1]==="work"?draft.workExperience:draft.projectExperience;
+ const entry=list[Number(match[2])];
+ if(!entry||Number(match[3])>=entry.bullets.length)return false;
+ entry.bullets[Number(match[3])]=text;
+ return true;
+}

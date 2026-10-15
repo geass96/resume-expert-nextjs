@@ -32,7 +32,11 @@ export function OptimizeStep() {
     userInput,
     optimizeStyle,
     setOptimizeStyle,
-    setAnalysisResult,
+    setOptimizedItems,
+    applyProposal,
+    rejectProposal,
+    proposalDecisions,
+    draftResume,
     setCurrentStep,
   } = useResumeStore();
   const [regenerating, setRegenerating] = useState(false);
@@ -48,7 +52,7 @@ export function OptimizeStep() {
     setOptimizeError(null);
     try {
       const items = await regenerateOptimizedItems(userInput, style);
-      setAnalysisResult({ ...analysisResult, optimizedItems: items });
+      setOptimizedItems(items);
     } catch (error) {
       setOptimizeError(error instanceof Error ? error.message : "优化生成失败");
     } finally {
@@ -117,6 +121,31 @@ export function OptimizeStep() {
                   <TableCell className="text-neutral-600">{item.reason}</TableCell>
                   <TableCell>
                     <span className="text-amber-700">{item.riskWarning}</span>
+                    <p className="mt-2 text-xs">决策：{proposalDecisions[item.id]?.decision || "待确认"}</p>
+                    <label className="block mt-2 text-xs" htmlFor={"target-"+item.id}>采纳位置</label>
+                    <select id={"target-"+item.id} className="w-full border rounded p-1 text-xs"
+                      defaultValue="" onChange={(event)=>{
+                        const target=event.currentTarget.value;
+                        event.currentTarget.dataset.target=target;
+                      }}>
+                      <option value="">请选择目标条目</option>
+                      <option value="summary">职业摘要</option>
+                      {draftResume?.workExperience.flatMap((w,i)=>w.bullets.map((b,j)=>(
+                        <option key={"w"+i+"-"+j} value={"work:"+i+":"+j}>{w.company} · 工作条目 {j+1}</option>
+                      )))}
+                      {draftResume?.projectExperience.flatMap((w,i)=>w.bullets.map((b,j)=>(
+                        <option key={"p"+i+"-"+j} value={"project:"+i+":"+j}>{w.name} · 项目条目 {j+1}</option>
+                      )))}
+                    </select>
+                    <div className="flex gap-2 mt-2">
+                      <Button size="sm" variant="outline" onClick={()=>{
+                        const el=document.getElementById("target-"+item.id) as HTMLSelectElement|null;
+                        if(!el?.value){window.alert("请先选择采纳位置");return;}
+                        applyProposal(item.id,el.value,item.after);
+                      }}>采纳</Button>
+                      <Button size="sm" variant="ghost" onClick={()=>rejectProposal(item.id)}>拒绝</Button>
+                    </div>
+                    <p className="mt-2 text-xs text-neutral-500">需要修改措辞时，请先进入最终简历编辑后再定稿。</p>
                   </TableCell>
                 </TableRow>
               ))}

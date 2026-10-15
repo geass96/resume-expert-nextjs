@@ -18,14 +18,14 @@ import { useResumeStore } from "@/store/resume-store";
 import { copyToClipboard, formatResumeAsText } from "@/lib/utils";
 
 export function ExportStep() {
-  const { analysisResult, copied, setCopied } = useResumeStore();
+  const { analysisResult, draftResume, copied, setCopied } = useResumeStore();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  if (!analysisResult) {
+  if (!draftResume && !analysisResult) {
     return <EmptyState message="请先完成输入材料并开始分析" />;
   }
 
-  const resumeText = formatResumeAsText(analysisResult.finalResume);
+  const resumeText = formatResumeAsText(draftResume ?? analysisResult!.finalResume);
 
   const handleCopy = async () => {
     const success = await copyToClipboard(resumeText);
@@ -110,7 +110,7 @@ export function ExportStep() {
         </Card>
       </div>
 
-      <Card>
+      {analysisResult && <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">完整分析摘要</CardTitle>
         </CardHeader>
@@ -137,7 +137,7 @@ export function ExportStep() {
             </p>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   );
 }

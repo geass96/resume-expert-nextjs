@@ -17,6 +17,9 @@ export function FollowUpStep() {
     userInput,
     updateFollowUpAnswer,
     setFollowUpBullet,
+    addBullet,
+    proposalDecisions,
+    draftResume,
     setCurrentStep,
   } = useResumeStore();
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -113,6 +116,21 @@ export function FollowUpStep() {
                 <div className="rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
                   <p className="mb-1 text-xs font-medium text-emerald-700">生成的 bullet</p>
                   <p className="text-sm leading-relaxed text-neutral-700">{q.generatedBullet}</p>
+                  <div className="mt-3 flex gap-2 items-center">
+                    <select aria-label={"选择要添加经历的目标 " + (index+1)}
+                      id={"bullet-target-"+q.id} defaultValue=""
+                      className="border rounded p-2 text-xs max-w-60">
+                      <option value="">选择添加到哪项经历</option>
+                      {draftResume?.workExperience.map((w,i)=><option key={"w"+i} value={"work:"+i}>{w.company}（工作）</option>)}
+                      {draftResume?.projectExperience.map((p,i)=><option key={"p"+i} value={"project:"+i}>{p.name}（项目）</option>)}
+                    </select>
+                    <Button variant="outline" size="sm" disabled={proposalDecisions["bullet:"+q.id]?.decision==="accepted"}
+                      onClick={()=>{
+                        const target=(document.getElementById("bullet-target-"+q.id) as HTMLSelectElement|null)?.value;
+                        if(!target){window.alert("请选择目标经历");return;}
+                        addBullet("bullet:"+q.id,target,q.generatedBullet);
+                      }}>确认加入最终简历</Button>
+                  </div>
                 </div>
               )}
             </CardContent>
