@@ -27,7 +27,7 @@ jobs:
           test ! -e .next/standalone/.env
           test ! -e .next/standalone/.env.local
           mkdir -p outputs
-          cp -a .next/static .next/standalone/.next/static
+          cp -a .next/static/. .next/standalone/.next/static/
           if test -d public; then cp -a public .next/standalone/public; fi
           tar -czf outputs/resume-expert-arm64.tar.gz -C .next/standalone .
       - uses: actions/upload-artifact@v4
