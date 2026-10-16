@@ -53,6 +53,7 @@ async function subscriptionResponse(options:Options, token:string){
      model:selectedSubscription()?.model,
      instructions:options.system,
      input:[{role:"user",content:options.user}],
+     max_output_tokens:options.maxTokens ?? 8192,
      store:false,stream:true
    }),
    signal:AbortSignal.timeout(90000),cache:"no-store"
@@ -71,10 +72,15 @@ async function subscriptionResponse(options:Options, token:string){
      const {done,value}=await reader.read();
      if(done)break;
      total+=value.byteLength;
-     if(total>250000)throw new LLMError("模型响应超出安全长度");
+     // SSE repeats metadata and obfuscation on deltas, so its wire size is
+     // substantially larger than output text. Keep both bounds independent.
+     if(total>8*1024*1024)throw new LLMError("模型响应超出安全长度");
      chunks.push(decoder.decode(value,{stream:true}));
    }
    chunks.push(decoder.decode());
+ }catch(error){
+   await reader.cancel().catch(()=>{});
+   throw error;
  }finally{reader.releaseLock();}
  const parsed=parseSubscriptionEvents(chunks);
  options.onUsage?.(parsed.inputTokens,parsed.outputTokens);
