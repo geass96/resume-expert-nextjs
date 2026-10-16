@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
-import { historyDb } from "@/lib/history-db";
+import { historyDb } from "./history-db.ts";
 
 export const MODEL_PROVIDER_PRESETS = {
   openai:{label:"OpenAI API",baseUrl:"https://api.openai.com/v1",suggested:"gpt-4o-mini"},
