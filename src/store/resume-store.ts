@@ -44,6 +44,7 @@ interface ResumeStore {
   setOptimizedItems: (items: AnalysisResult["optimizedItems"]) => void;
   applyProposal: (id: string, path: string, text: string, edited?: boolean) => void;
   rejectProposal: (id: string) => void;
+  setEvidenceNote: (fieldPath: string, note: string) => void;
   updateDraft: (path: string, text: string) => void;
   addBullet: (id: string, path: string, text: string) => void;
   restoreVersion: (snapshot: FinalResume, versionId: string, profileId: string, jobId: string, role?: string) => void;
@@ -183,6 +184,11 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
   rejectProposal: (id)=>set((state)=>({proposalDecisions:{...state.proposalDecisions,[id]:{
     decision:"rejected",fieldPath:"",text:"",at:new Date().toISOString()
   }}})),
+  setEvidenceNote: (fieldPath,note)=>set(state=>({
+    proposalDecisions:{...state.proposalDecisions,["evidence:"+fieldPath]:{
+      decision:"edited",fieldPath,text:note.slice(0,1500),at:new Date().toISOString()
+    }}
+  })),
   addBullet: (id,path,text)=>set((state)=>{
     if(!state.draftResume||!text.trim())return {};
     const draft=structuredClone(state.draftResume);
