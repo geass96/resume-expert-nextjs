@@ -109,6 +109,17 @@ export function InterviewSimStep() {
       setSession(data.session);await loadLists();
     }catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
+  async function removePractice(item:Summary) {
+    if(!window.confirm("确定移出这场历史练习？删除后会从列表和对比中隐藏，不能在页面恢复。"))return;
+    setBusy(true);setError("");
+    try{
+      const response=await fetch("/api/interview/sessions/"+encodeURIComponent(item.id),{method:"DELETE"});
+      if(!response.ok)throw Error((await response.json()).error||"删除失败");
+      if(session?.id===item.id){setSession(null);setAnswer("");}
+      if(compareId===item.id){setCompareId("");setComparisonSession(null);}
+      await loadLists();
+    }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
   const selected=versions.find(v=>v.id===versionId);
   const comparable=sessions.filter(s=>session && s.jobId===session.jobId && s.id!==session.id);
    const average=(turns:InterviewTurn[])=>turns.length?Math.round(turns.reduce((sum,t)=>sum+t.feedback.overall,0)/turns.length):null;
@@ -174,7 +185,10 @@ export function InterviewSimStep() {
           <p className="font-medium">{s.role} · V{s.versionNo} · {INTERVIEW_KINDS[s.kind]}</p>
           <p className="text-xs text-neutral-500">{s.roundCount}/{INTERVIEW_MAX_ROUNDS} 轮 · {s.status==="active"?"进行中":s.status==="paused"?"已暂停":"已完成"} · {new Date(s.updatedAt).toLocaleString("zh-CN")}</p>
         </div>
-        <Button variant="outline" size="sm" disabled={busy} onClick={()=>void open(s.id)}>{s.status==="completed"?"回放":"打开练习"}</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={busy} onClick={()=>void open(s.id)}>{s.status==="completed"?"回放":"打开练习"}</Button>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={()=>void removePractice(s)} aria-label={"删除练习 "+s.role+" V"+s.versionNo}>删除</Button>
+        </div>
       </div>)}
     </CardContent></Card>
   </div>;
