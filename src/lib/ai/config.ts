@@ -1,4 +1,5 @@
 import type { AIMode } from "@/lib/ai/types";
+import { activeModelCredentials } from "@/lib/model-settings";
 
 export interface AIConfig {
   mode: AIMode;
@@ -9,6 +10,12 @@ export interface AIConfig {
 }
 
 export function getAIConfig(): AIConfig {
+  // A saved profile takes precedence over legacy env vars. Credentials never reach the browser.
+  if(process.env.RESUME_DATA_DIR){
+    const profile=activeModelCredentials();
+    if(profile?.mode==="llm")return {...profile,mode:"llm"};
+    if(profile?.mode==="mock")return {mode:"mock",apiKey:"",baseUrl:"",model:"",provider:"manual"};
+  }
   const apiKey = process.env.LLM_API_KEY?.trim() ?? "";
   const forceMock = process.env.USE_MOCK_AI === "true";
   const mode: AIMode = !forceMock && apiKey ? "llm" : "mock";
