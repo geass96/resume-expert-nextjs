@@ -40,6 +40,8 @@ function init() {
     UNIQUE(session_id,round)
   );
   CREATE INDEX IF NOT EXISTS interview_turns_order ON interview_turns(session_id,round);`);
+  const columns=db.prepare("PRAGMA table_info(interview_sessions)").all() as Array<{name:string}>;
+  if (!columns.some(c=>c.name==="deleted_at")) db.exec("ALTER TABLE interview_sessions ADD COLUMN deleted_at TEXT;");
   return db;
 }
 function rowToSession(v: Record<string, unknown>): InterviewSession {
@@ -53,12 +55,12 @@ function rowToSession(v: Record<string, unknown>): InterviewSession {
 }
 export function listSessions() {
   const db = init();
-  return (db.prepare("SELECT s.*, v.version_no AS versionNo, v.job_id AS jobId FROM interview_sessions s JOIN resume_versions v ON v.id=s.version_id ORDER BY s.updated_at DESC LIMIT 120").all() as Record<string, unknown>[])
+  return (db.prepare("SELECT s.*, v.version_no AS versionNo, v.job_id AS jobId FROM interview_sessions s JOIN resume_versions v ON v.id=s.version_id WHERE s.deleted_at IS NULL ORDER BY s.updated_at DESC LIMIT 120").all() as Record<string, unknown>[])
     .map(row => ({ ...rowToSession(row), versionNo: Number(row.versionNo) }));
 }
 export function readSession(id: string): (InterviewSession & { turns: InterviewTurn[]; versionNo: number }) | null {
   const db = init();
-  const row = db.prepare("SELECT s.*, v.version_no AS versionNo, v.job_id AS jobId FROM interview_sessions s JOIN resume_versions v ON v.id=s.version_id WHERE s.id=?").get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare("SELECT s.*, v.version_no AS versionNo, v.job_id AS jobId FROM interview_sessions s JOIN resume_versions v ON v.id=s.version_id WHERE s.id=? AND s.deleted_at IS NULL").get(id) as Record<string, unknown> | undefined;
   if (!row) return null;
   const turns = (db.prepare("SELECT * FROM interview_turns WHERE session_id=? ORDER BY round").all(id) as Record<string, unknown>[])
     .map(v => ({
@@ -110,6 +112,12 @@ export function saveRound(id: string, expectedRound: number, answer: string, fee
     db.exec("ROLLBACK"); throw err;
   }
   return readSession(id)!;
+}
+export function deleteInterviewSession(id: string): boolean {
+  const db=init();
+  const result=db.prepare("UPDATE interview_sessions SET deleted_at=?, updated_at=? WHERE id=? AND deleted_at IS NULL")
+    .run(new Date().toISOString(), new Date().toISOString(), id);
+  return result.changes === 1;
 }
 export function getInterviewContext(versionId: string) {
   const db = init();
