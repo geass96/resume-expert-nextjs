@@ -33,7 +33,7 @@ test("SQLite sessions: status, version isolation, duplicate turns and replay",as
  const dir=mkdtempSync(join(tmpdir(),"resume-interview-"));
  process.env.RESUME_DATA_DIR=dir;
  const {saveVersion,closeHistoryDb}=await import("../src/lib/history-db.ts");
- const {startSession,readSession,saveRound,listSessions,changeSessionState,getInterviewContext}=await import("../src/lib/interview-db.ts");
+ const {startSession,readSession,saveRound,listSessions,changeSessionState,getInterviewContext,deleteInterviewSession}=await import("../src/lib/interview-db.ts");
  try{
  const base={profileTitle:"Master",company:"Example Co",role:"AI PM",jdText:"AI product",label:"First",note:"",snapshot:example,decisions:{}};
  const a=saveVersion(base);
@@ -58,5 +58,9 @@ test("SQLite sessions: status, version isolation, duplicate turns and replay",as
  assert.equal(listSessions()[0].versionId,a.id);
  assert.equal(changeSessionState(session.id,"finish").status,"completed");
  assert.throws(()=>changeSessionState(session.id,"resume"));
+ assert.equal(deleteInterviewSession(session.id),true);
+ assert.equal(readSession(session.id),null);
+ assert.equal(listSessions().some(x=>x.id===session.id),false);
+ assert.equal(deleteInterviewSession(session.id),false);
  }finally{closeHistoryDb();rmSync(dir,{force:true,recursive:true});}
 });
