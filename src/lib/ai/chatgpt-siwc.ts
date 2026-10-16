@@ -2,9 +2,21 @@ import { parseJSONFromMessage } from "./parse-json.ts";
 import { subscriptionAccessToken, selectedSubscription, SIWC_BASE } from "../chatgpt-subscription.ts";
 import { LLMError } from "./errors.ts";
 
-type Options={system:string;user:string;maxTokens?:number};
+type Options={system:string;user:string;maxTokens?:number} & TokenObserver;
+type TokenObserver={
+ onAttempt?:()=>void;
+ onUsage?:(input:number|null,output:number|null)=>void;
+};
+
 export function readSubscriptionEvents(chunks:string[]):string{
+ return parseSubscriptionEvents(chunks).text;
+}
+export function parseSubscriptionEvents(chunks:string[]):{
+ text:string; inputTokens:number|null;outputTokens:number|null;
+}{
+
  let buffer="",text="",completed=false;
+ let inputTokens:number|null=null,outputTokens:number|null=null;
  for(const chunk of chunks){
    buffer+=chunk.replace(/\r\n/g,"\n");
    let stop:number;
@@ -20,14 +32,21 @@ export function readSubscriptionEvents(chunks:string[]):string{
      }
      if(event.type==="response.failed"||event.type==="response.incomplete"||event.type==="error")
        throw new LLMError("ChatGPT 订阅请求未成功完成："+String(event.type));
-     if(event.type==="response.completed")completed=true;
+     if(event.type==="response.completed"){
+       completed=true;
+       const response=event.response as {usage?:{input_tokens?:number;output_tokens?:number}}|undefined;
+       const input=response?.usage?.input_tokens,output=response?.usage?.output_tokens;
+       inputTokens=typeof input==="number"&&Number.isSafeInteger(input)&&input>=0?input:null;
+       outputTokens=typeof output==="number"&&Number.isSafeInteger(output)&&output>=0?output:null;
+     }
    }
  }
  if(!completed)throw new LLMError("ChatGPT 订阅响应中断，未收到完成标志");
  if(!text.trim())throw new LLMError("ChatGPT 订阅未返回文本");
- return text;
+ return {text,inputTokens,outputTokens};
 }
 async function subscriptionResponse(options:Options, token:string){
+ options.onAttempt?.();
  const res=await fetch(SIWC_BASE+"/responses",{
    method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},
    body:JSON.stringify({
@@ -57,7 +76,9 @@ async function subscriptionResponse(options:Options, token:string){
    }
    chunks.push(decoder.decode());
  }finally{reader.releaseLock();}
- return readSubscriptionEvents(chunks);
+ const parsed=parseSubscriptionEvents(chunks);
+ options.onUsage?.(parsed.inputTokens,parsed.outputTokens);
+ return parsed.text;
 }
 export async function subscriptionCompletionJSON<T>(options:Options):Promise<T>{
  let accessToken=await subscriptionAccessToken();

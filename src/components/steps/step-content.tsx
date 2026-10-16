@@ -13,6 +13,7 @@ import { ExportStep } from "@/components/steps/export-step";
 import { HistoryStep } from "@/components/steps/history-step";
 import { InterviewSimStep } from "@/components/steps/interview-sim-step";
 import { ModelSettingsStep } from "@/components/steps/model-settings-step";
+import { AIUsageStep } from "@/components/steps/ai-usage-step";
 
 export function StepContent() {
   const currentStep = useResumeStore((s) => s.currentStep);
@@ -42,6 +43,8 @@ export function StepContent() {
       return <InterviewSimStep />;
     case "model-settings":
       return <ModelSettingsStep />;
+    case "ai-usage":
+      return <AIUsageStep />;
     default:
       return <InputStep />;
   }

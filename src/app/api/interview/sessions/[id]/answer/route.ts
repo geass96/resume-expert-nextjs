@@ -38,7 +38,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
           confirmedResume:context.snapshot,mode:session.kind,previous,
           question:session.question,answer:body.answer,round:body.round
         }).slice(0,19500),
-        maxTokens:1250
+        purpose:"interview_answer",maxTokens:1250
       });
       const feedback=normalizeFeedback(raw,"llm");
       const nextQuestion=body.round>=INTERVIEW_MAX_ROUNDS?"":String(raw.nextQuestion||"").trim().slice(0,1000);

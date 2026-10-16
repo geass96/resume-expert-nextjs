@@ -4,11 +4,13 @@ import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SectionTitle } from "@/components/shared/ui-helpers";
 import { ChatGPTSubscriptionPanel } from "@/components/steps/chatgpt-subscription-panel";
+import { useResumeStore } from "@/store/resume-store";
 
 type Preset={label:string;baseUrl:string;suggested:string};
 type Profile={id:string;provider:string;model:string;active:boolean;hasKey:boolean;updatedAt:string};
 type ConfigData={providers:Record<string,Preset>;profiles:Profile[];mode:string;selectedId:string|null};
 export function ModelSettingsStep(){
+  const setCurrentStep=useResumeStore(state=>state.setCurrentStep);
   const [data,setData]=useState<ConfigData|null>(null);
   const [provider,setProvider]=useState("openai");
   const [model,setModel]=useState("gpt-4o-mini");
@@ -49,6 +51,11 @@ export function ModelSettingsStep(){
     <SectionTitle title="模型配置" description="个人使用的模型接入控制台。模型密钥只保存在服务器，不回显，也不会写入 GitHub。" />
     {!!error&&<p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {!!notice&&<p role="status" className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm">{notice}</p>}
+    <Card><CardContent className="p-4 flex flex-wrap gap-3 items-center justify-between">
+      <div><p className="font-medium text-sm">AI 用量与调用记录</p>
+        <p className="text-xs text-neutral-500">查看各功能模型调用、Token 用量、失败记录及耗时</p></div>
+      <Button variant="outline" onClick={()=>setCurrentStep("ai-usage")}>打开用量统计</Button>
+    </CardContent></Card>
     <ChatGPTSubscriptionPanel />
     <Card><CardHeader><CardTitle>当前运行方式</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
       <p>{data?.mode==="llm"?"已选择真实模型":data?.mode==="mock"?"手动模拟模式":data?.mode==="siwc"?"ChatGPT 订阅 OAuth（查看上方状态）":"沿用服务器环境变量 / Mock（尚未选定页面配置）"}</p>

@@ -87,3 +87,8 @@ src/
 The Model Settings page now offers a browser-based "Connect ChatGPT" entrypoint on the owners Windows PC. A localhost-only companion (127.0.0.1:46729) starts the official OAuth loopback authorization; after consent, its authenticated one-time pairing securely delivers verified credentials to the users self-hosted VPS via HTTPS. No user terminal commands, SSH commands, copied tokens, browser cookies, or paid API fallback are required.
 
 Windows helper is configured to launch on user sign-in; reinstall when moving the project to another PC. See docs/CHATGPT-BROWSER-OAUTH.md for architecture and security; docs/CHATGPT-SUBSCRIPTION.md remains a manual legacy fallback. Official authorization and plan usage must still be approved by the account owner.
+
+
+## v0.7.0 - AI usage and call records
+
+Added the AI usage dashboard to left navigation and Model Settings. Server-side SQLite records each logical AI inference (function, provider/model, subscription/API channel, success/failure, duration, attempts, and actual provider-reported input/output Tokens). Supports time/function/model/status filters, daily totals, group summaries, pagination, and secure owner-only API. Missing usage is explicitly unknown; this is not a ChatGPT subscription balance dashboard. Logs start at v0.7.0; older requests are not backfilled. Details: docs/AI-USAGE-v0.7.md.

@@ -27,7 +27,7 @@ export async function POST(request:Request){
    const output=await chatCompletionJSON<{introduction:string}>({
     system:"根据已经人工确认的简历撰写中文面试自我介绍。绝对不编造经历、数字、项目或技能。只返回 JSON 对象，属性 introduction。",
     user:"岗位："+version.role+"。公司："+version.company+"。时长："+duration+"分钟。简历："+JSON.stringify(resume).slice(0,10000),
-    maxTokens:duration===1?650:1600
+    purpose:"self_introduction",maxTokens:duration===1?650:1600
    });
    content=String(output.introduction||"").slice(0,5000);mode="llm";
   }else{

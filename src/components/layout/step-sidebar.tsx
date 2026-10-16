@@ -2,6 +2,7 @@
 
 import {
   Brain,
+  BarChart3,
   Check,
   Circle,
   ClipboardList,
@@ -31,6 +32,7 @@ const STEPS: { id: StepId; label: string; icon: React.ElementType }[] = [
   { id: "history", label: "历史版本", icon: ClipboardList },
   { id: "sim-interview", label: "模拟面试", icon: Brain },
   { id: "model-settings", label: "模型配置", icon: Settings2 },
+  { id: "ai-usage", label: "AI 用量", icon: BarChart3 },
 ];
 
 export function StepSidebar() {

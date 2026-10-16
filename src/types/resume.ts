@@ -12,7 +12,8 @@ export type StepId =
   | "export"
   | "history"
   | "sim-interview"
-  | "model-settings";
+  | "model-settings"
+  | "ai-usage";
 
 export type StepStatus = "pending" | "active" | "completed" | "disabled";
 

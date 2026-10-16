@@ -28,6 +28,7 @@ try{
  assert(ready,"Application did not start: "+output);
  assert.equal((await fetch(origin+"/",{redirect:"manual"})).status,307,"Anonymous frontend redirect");
  assert.equal((await fetch(origin+"/api/history")).status,401,"Anonymous history must be private");
+ assert.equal((await fetch(origin+"/api/ai/usage")).status,401,"Anonymous AI usage must be private");
  assert.equal((await fetch(origin+"/api/analyze",{method:"POST",headers:{Origin:origin}})).status,401,"Anonymous cannot consume LLM");
  const login=await fetch(origin+"/api/auth/login",{method:"POST",headers:{Origin:origin,"Content-Type":"application/json"},body:JSON.stringify({password})});
  assert.equal(login.status,200,"Login must succeed");
@@ -35,6 +36,16 @@ try{
  const headers={Cookie:cookie,Origin:origin,"Content-Type":"application/json"};
  assert.equal((await fetch(origin+"/",{headers})).status,200);
  assert.equal((await fetch(origin+"/api/history",{headers})).status,200);
+ const usage=await fetch(origin+"/api/ai/usage?days=30&page=1",{headers});
+ assert.equal(usage.status,200,"Authenticated owner can read AI usage");
+ const usageData=await usage.json();
+ assert.equal(usageData.summary.total,0,"Fresh isolated install starts with no AI usage");
+ assert(Array.isArray(usageData.rows)&&Array.isArray(usageData.byPurpose));
+ assert(!JSON.stringify(usageData).includes(password));
+ assert.equal((await fetch(origin+"/api/ai/usage?days=not-a-number",{headers})).status,400);
+ assert.equal((await fetch(origin+"/api/ai/usage?purpose=private",{headers})).status,400);
+ console.log("PASS isolated HTTP: AI usage is private, filtered, secret-free and starts empty");
+
  assert.equal((await fetch(origin+"/api/history",{method:"POST",headers:{...headers,Origin:"https://evil.invalid"},body:"{}"})).status,403);
  const snapshot={personalInfo:{name:"测试",phone:"",email:"",location:""},jobIntent:"AI",summary:"测试",
   coreSkills:[],workExperience:[],projectExperience:[],skillsAndTools:[],education:{school:"",degree:"",period:""}};

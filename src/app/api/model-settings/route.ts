@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { protectedRequest,checkPayload,limitAttempt } from "@/lib/auth";
 import { credentialsForModel,deleteModelSettings,listModelSettings,saveModelSettings,setActiveModel } from "@/lib/model-settings";
+import { safelyRecordAIUsage } from "@/lib/ai-usage";
 
 export const runtime="nodejs";
 export async function GET(request:Request){
@@ -36,18 +37,40 @@ export async function POST(request:Request){
     if(action.action==="test"){
       if(typeof action.id!=="string"||action.id.length>100)throw Error("无效配置 ID");
       const config=credentialsForModel(action.id);
-      // Outgoing network requests are limited to hard-coded official provider URLs.
-      const response=await fetch(config.baseUrl+"/chat/completions",{
-        method:"POST",signal:AbortSignal.timeout(18000),
-        headers:{"Content-Type":"application/json",Authorization:"Bearer "+config.apiKey},
-        body:JSON.stringify({model:config.model,max_tokens:40,
-          messages:[{role:"system",content:"You are a connectivity probe."},{role:"user",content:"Reply with OK."}]}),
-      });
-      if(!response.ok)return NextResponse.json({ok:false,error:"服务返回 HTTP "+response.status},{status:422});
-      const parsed=await response.json() as {choices?:unknown[]};
-      if(!Array.isArray(parsed.choices)||!parsed.choices.length)
-        return NextResponse.json({ok:false,error:"服务返回格式不兼容"},{status:422});
-      return NextResponse.json({ok:true,message:"真实模型连接测试成功"});
+      const started=Date.now();
+      let ok=false,inputTokens:number|null=null,outputTokens:number|null=null,errorCode:string|null="request_failed";
+      try{
+        // Connectivity checks use only fixed provider URLs and never store credentials.
+        const response=await fetch(config.baseUrl+"/chat/completions",{
+          method:"POST",signal:AbortSignal.timeout(18000),
+          headers:{"Content-Type":"application/json",Authorization:"Bearer "+config.apiKey},
+          body:JSON.stringify({model:config.model,max_tokens:40,
+            messages:[{role:"system",content:"You are a connectivity probe."},{role:"user",content:"Reply with OK."}]}),
+        });
+        if(!response.ok){
+          errorCode="http_"+response.status;
+          return NextResponse.json({ok:false,error:"服务返回 HTTP "+response.status},{status:422});
+        }
+        const parsed=await response.json() as {
+          choices?:unknown[];
+          usage?:{prompt_tokens?:number;completion_tokens?:number};
+        };
+        const input=parsed.usage?.prompt_tokens,output=parsed.usage?.completion_tokens;
+        inputTokens=typeof input==="number"&&Number.isSafeInteger(input)&&input>=0?input:null;
+        outputTokens=typeof output==="number"&&Number.isSafeInteger(output)&&output>=0?output:null;
+        if(!Array.isArray(parsed.choices)||!parsed.choices.length){
+          errorCode="invalid_model_response";
+          return NextResponse.json({ok:false,error:"服务返回格式不兼容"},{status:422});
+        }
+        ok=true;errorCode=null;
+        return NextResponse.json({ok:true,message:"真实模型连接测试成功"});
+      }finally{
+        safelyRecordAIUsage({
+          purpose:"model_connection_test",provider:config.provider,model:config.model,channel:"api",
+          status:ok?"success":"failed",durationMs:Date.now()-started,
+          inputTokens,outputTokens,attempts:1,errorCode,
+        });
+      }
     }
     throw Error("操作不支持");
   }catch(e){

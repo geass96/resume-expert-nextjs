@@ -40,12 +40,14 @@ export async function runLLMResumeAnalysis(
   const jd = await chatCompletionJSON<JDAnalysisResult>({
     system: RESUME_AGENT_SYSTEM_PROMPT,
     user: buildAnalyzeCorePrompt(input),
+    purpose: "jd_analysis",
     maxTokens: 3000,
   });
 
   const diagnosisMatch = await chatCompletionJSON<DiagnosisMatchResult>({
     system: RESUME_AGENT_SYSTEM_PROMPT,
     user: buildAnalyzeDiagnosisPrompt(input),
+    purpose: "resume_diagnosis",
     maxTokens: 4000,
   });
 
@@ -55,11 +57,13 @@ export async function runLLMResumeAnalysis(
     chatCompletionJSON<OptimizeResumeResult>({
       system: RESUME_AGENT_SYSTEM_PROMPT,
       user: buildAnalyzeOutputPrompt(input, optimizeStyle, coreSummary),
+    purpose: "initial_optimization",
       maxTokens: 4500,
     }),
     chatCompletionJSON<InterviewResult>({
       system: RESUME_AGENT_SYSTEM_PROMPT,
       user: buildAnalyzeInterviewPrompt(input, coreSummary),
+    purpose: "interview_preparation",
       maxTokens: 3500,
     }),
   ]);
@@ -84,6 +88,7 @@ export async function runLLMRegenerateOptimizedItems(
   const raw = await chatCompletionJSON<{ optimizedItems: AnalysisResult["optimizedItems"] }>({
     system: RESUME_AGENT_SYSTEM_PROMPT,
     user: buildOptimizeUserPrompt(input, style),
+    purpose: "regenerate_optimization",
     temperature: 0.5,
     maxTokens: 4000,
   });
@@ -100,6 +105,7 @@ export async function runLLMFollowUpBullet(
   const raw = await chatCompletionJSON<{ bullet: string }>({
     system: RESUME_AGENT_SYSTEM_PROMPT,
     user: buildFollowUpBulletPrompt(input, question, purpose, userAnswer),
+    purpose: "experience_followup",
     temperature: 0.3,
     maxTokens: 500,
   });
