@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { LLMError } from "@/lib/ai/client";
 import type { AnalyzeRequestBody } from "@/lib/ai/types";
 import { analyzeResumeServer } from "@/services/ai/resumeAgent.server";
+import { streamJSON } from "@/lib/ai/stream-json";
 
 export async function POST(request: Request) {
   const forbidden=await protectedRequest(request,true);if(forbidden)return forbidden;
@@ -17,8 +18,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请填写目标岗位、JD 和原始简历" }, { status: 400 });
     }
 
-    const { result, mode } = await analyzeResumeServer(input, optimizeStyle);
-    return NextResponse.json({ result, mode });
+    return streamJSON(async()=>{
+      try {
+        const { result, mode } = await analyzeResumeServer(input, optimizeStyle);
+        return { result, mode };
+      } catch(error) {
+        const message=error instanceof Error?error.message:"分析失败，请稍后重试";
+        console.error("[analyze]",error);
+        return {error:message};
+      }
+    });
   } catch (error) {
     const message =
       error instanceof LLMError

@@ -23,7 +23,7 @@ async function postJSON<T>(url: string, body: unknown): Promise<T> {
 
   const data = (await response.json().catch(() => ({}))) as T & { error?: string };
 
-  if (!response.ok) {
+  if (!response.ok || data.error) {
     throw new ResumeAgentClientError(data.error || `请求失败 (${response.status})`);
   }
 
