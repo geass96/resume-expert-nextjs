@@ -79,6 +79,10 @@ try{
  assert.equal((await replay.json()).session.turns.length,6);
  const list=await fetch(origin+"/api/interview/sessions",{headers});
  assert.equal((await list.json()).sessions[0].versionId,a.id);
+ const remove=await fetch(origin+"/api/interview/sessions/"+session.id,{method:"DELETE",headers});
+ assert.equal(remove.status,200);
+ assert.equal((await fetch(origin+"/api/interview/sessions/"+session.id,{headers})).status,404);
+ assert.equal((await fetch(origin+"/api/interview/sessions",{headers}).then(r=>r.json())).sessions.some(x=>x.id===session.id),false);
  console.log("PASS isolated HTTP: mock interview, JD-backed session, pause/resume, 6 rounds, duplicate protection, replay, private API");
  console.log("PASS isolated HTTP: login, private UI/API, CSRF, version persistence, compare and introduction");
 }finally{
