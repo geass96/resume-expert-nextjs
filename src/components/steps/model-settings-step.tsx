@@ -3,6 +3,7 @@ import { useEffect,useState } from "react";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SectionTitle } from "@/components/shared/ui-helpers";
+import { ChatGPTSubscriptionPanel } from "@/components/steps/chatgpt-subscription-panel";
 
 type Preset={label:string;baseUrl:string;suggested:string};
 type Profile={id:string;provider:string;model:string;active:boolean;hasKey:boolean;updatedAt:string};
@@ -48,8 +49,9 @@ export function ModelSettingsStep(){
     <SectionTitle title="模型配置" description="个人使用的模型接入控制台。模型密钥只保存在服务器，不回显，也不会写入 GitHub。" />
     {!!error&&<p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {!!notice&&<p role="status" className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm">{notice}</p>}
+    <ChatGPTSubscriptionPanel />
     <Card><CardHeader><CardTitle>当前运行方式</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
-      <p>{data?.mode==="llm"?"已选择真实模型":data?.mode==="mock"?"手动模拟模式":"沿用服务器环境变量 / Mock（尚未选定页面配置）"}</p>
+      <p>{data?.mode==="llm"?"已选择真实模型":data?.mode==="mock"?"手动模拟模式":data?.mode==="siwc"?"ChatGPT 订阅 OAuth（查看上方状态）":"沿用服务器环境变量 / Mock（尚未选定页面配置）"}</p>
       <Button variant="outline" disabled={busy} onClick={()=>void action({action:"mock"})}>切换到 Mock 模拟模式</Button>
       <p className="text-xs text-neutral-500">切换模型后，新发起的简历分析、建议改写和面试评价使用所选模型。此前已生成的记录不会自动重写。</p>
     </CardContent></Card>

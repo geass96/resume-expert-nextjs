@@ -1,5 +1,6 @@
 import type { AIMode } from "@/lib/ai/types";
 import { activeModelCredentials } from "@/lib/model-settings";
+import { selectedSubscription } from "@/lib/chatgpt-subscription";
 
 export interface AIConfig {
   mode: AIMode;
@@ -10,6 +11,11 @@ export interface AIConfig {
 }
 
 export function getAIConfig(): AIConfig {
+  // ChatGPT plan OAuth uses its own Responses API path, never a normal API key.
+  if(process.env.RESUME_DATA_DIR){
+    const subscription=selectedSubscription();
+    if(subscription)return {mode:"llm",apiKey:"",baseUrl:"https://api.openai.com/v1",model:subscription.model,provider:"chatgpt-siwc"};
+  }
   // A saved profile takes precedence over legacy env vars. Credentials never reach the browser.
   if(process.env.RESUME_DATA_DIR){
     const profile=activeModelCredentials();

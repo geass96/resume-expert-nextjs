@@ -29,6 +29,8 @@ jobs:
           mkdir -p outputs
           cp -a .next/static/. .next/standalone/.next/static/
           if test -d public; then cp -a public .next/standalone/public; fi
+          mkdir -p .next/standalone/scripts
+          cp scripts/siwc-import.mjs .next/standalone/scripts/siwc-import.mjs
           tar -czf outputs/resume-expert-arm64.tar.gz -C .next/standalone .
       - uses: actions/upload-artifact@v4
         with:

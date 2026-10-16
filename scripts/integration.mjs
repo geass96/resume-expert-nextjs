@@ -83,6 +83,19 @@ try{
  assert.equal(remove.status,200);
  assert.equal((await fetch(origin+"/api/interview/sessions/"+session.id,{headers})).status,404);
  assert.equal((await fetch(origin+"/api/interview/sessions",{headers}).then(r=>r.json())).sessions.some(x=>x.id===session.id),false);
+ assert.equal((await fetch(origin+"/api/chatgpt-subscription")).status,401,"Subscription status is private");
+ assert.equal((await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers:{...headers,Origin:"https://evil.invalid"},body:JSON.stringify({action:"activate",model:"gpt-6.1-sol"})})).status,403,"OAuth state changes require same origin");
+ const siwc=await fetch(origin+"/api/chatgpt-subscription",{headers});
+ assert.equal(siwc.status,200,"Subscription status accessible to logged in owner");
+ const info=await siwc.json();
+ assert.equal(info.connected,false,"No OAuth credentials installed");
+ assert.equal(info.active,false,"No subscription accidentally active");
+ assert.match(info.hostId,/^urn:uuid:/,"VM host ID persisted");
+ const noCredentials=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"activate",model:"gpt-6.1-sol"})});
+ assert.equal(noCredentials.status,400,"Cannot activate subscription without consent");
+ const noModels=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"models"})});
+ assert.equal(noModels.status,409,"Cannot read subscription catalog without consent");
+ console.log("PASS isolated HTTP: SIWC OAuth status, stable host, login and CSRF protections, no unauthorized activation");
  console.log("PASS isolated HTTP: mock interview, JD-backed session, pause/resume, 6 rounds, duplicate protection, replay, private API");
  console.log("PASS isolated HTTP: login, private UI/API, CSRF, version persistence, compare and introduction");
 }finally{

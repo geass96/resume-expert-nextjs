@@ -1,4 +1,5 @@
 import { getAIConfig } from "@/lib/ai/config";
+import { subscriptionCompletionJSON } from "@/lib/ai/chatgpt-siwc";
 import { LLMError } from "@/lib/ai/errors";
 import { parseJSONFromMessage } from "@/lib/ai/parse-json";
 
@@ -27,6 +28,7 @@ export async function chatCompletionJSON<T>(options: ChatCompletionOptions): Pro
 
 async function requestChatCompletionJSON<T>(options: ChatCompletionOptions): Promise<T> {
   const config = getAIConfig();
+  if (config.provider==="chatgpt-siwc")return subscriptionCompletionJSON<T>(options);
   if (!config.apiKey) throw new LLMError("未配置 LLM_API_KEY");
 
   const data = await callChatCompletions(config, options);

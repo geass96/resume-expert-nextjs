@@ -1,4 +1,4 @@
-import { LLMError } from "@/lib/ai/errors";
+import { LLMError } from "./errors.ts";
 
 export function parseJSONContent<T>(content: string): T {
   const candidates = collectJsonCandidates(content);
