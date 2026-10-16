@@ -36,3 +36,38 @@ jobs:
           path: outputs/resume-expert-arm64.tar.gz
           retention-days: 14
           if-no-files-found: error
+  deploy:
+    name: Deploy approved ARM64 build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RESUME_AUTO_DEPLOY == 'true'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Download this commit's tested artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: resume-expert-arm64-${{ github.sha }}
+          path: release
+      - name: Transfer and activate release
+        env:
+          DEPLOY_HOST: ${{ vars.RESUME_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.RESUME_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.RESUME_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.RESUME_DEPLOY_KNOWN_HOSTS }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test -s release/resume-expert-arm64.tar.gz
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/resume_deploy"
+          chmod 0600 "$HOME/.ssh/resume_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          SSH_ARGS=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -i "$HOME/.ssh/resume_deploy")
+          scp "${SSH_ARGS[@]}" release/resume-expert-arm64.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/resume-expert-release-$RELEASE_SHA.tar.gz"
+          ssh "${SSH_ARGS[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "sudo /usr/local/sbin/resume-expert-release-deploy '$RELEASE_SHA'"
