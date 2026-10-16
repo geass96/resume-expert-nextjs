@@ -21,7 +21,14 @@ export function ModelSettingsStep(){
     if(!r.ok)throw Error("模型配置读取失败");
     setData(await r.json());
   }
-  useEffect(()=>{void refresh().catch(e=>setError(e.message));},[]);
+  useEffect(()=>{
+    let active=true;
+    void fetch("/api/model-settings",{cache:"no-store"})
+      .then(async response=>{if(!response.ok)throw Error("模型配置读取失败");return response.json();})
+      .then(value=>{if(active)setData(value);})
+      .catch(e=>{if(active)setError(e.message);});
+    return ()=>{active=false;};
+  },[]);
   async function action(operation:Record<string,unknown>,method="POST"){
     setBusy(true);setError("");setNotice("");
     try{
