@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { EmptyState, SectionTitle } from "@/components/shared/ui-helpers";
 import { useResumeStore } from "@/store/resume-store";
+import { EvidenceAuditPanel } from "@/components/steps/evidence-audit-panel";
 
 export function FinalResumeStep() {
   const { analysisResult, draftResume, updateDraft, setCurrentStep } = useResumeStore();
@@ -29,6 +30,7 @@ export function FinalResumeStep() {
         <p className="text-xs text-neutral-500">当前是可编辑草稿。修改完成后请到“历史版本”定稿保存，历史记录不会被覆盖。</p>
         <Button size="sm" onClick={() => setCurrentStep("history")}>保存新版本</Button>
       </div>
+      <EvidenceAuditPanel />
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="mb-4">
