@@ -14,9 +14,14 @@ import { HistoryStep } from "@/components/steps/history-step";
 import { InterviewSimStep } from "@/components/steps/interview-sim-step";
 import { ModelSettingsStep } from "@/components/steps/model-settings-step";
 import { AIUsageStep } from "@/components/steps/ai-usage-step";
+import { RestoreAnalysisStep } from "@/components/steps/restore-analysis-step";
 
 export function StepContent() {
   const currentStep = useResumeStore((s) => s.currentStep);
+  const needsAnalysis = useResumeStore((s) => !!s.draftResume && !s.analysisResult);
+
+  if(needsAnalysis && ["jd-analysis","diagnosis","match","follow-up","optimize"].includes(currentStep))
+    return <RestoreAnalysisStep />;
 
   switch (currentStep) {
     case "input":

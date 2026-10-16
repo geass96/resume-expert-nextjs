@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { SectionTitle } from "@/components/shared/ui-helpers";
 import type { FinalResume } from "@/types/resume";
 import { compareResumeVersions } from "@/lib/version-diff";
@@ -16,7 +17,7 @@ type Summary = {
 };
 type Saved = Summary & {snapshot:FinalResume;decisions:Record<string,unknown>;note:string};
 export function HistoryStep() {
- const {draftResume,userInput,proposalDecisions,parentVersionId,currentJobId,currentProfileId,markSaved,restoreVersion,setCurrentStep}=useResumeStore();
+ const {draftResume,userInput,analysisResult,optimizeStyle,proposalDecisions,parentVersionId,currentJobId,currentProfileId,markSaved,restoreVersion}=useResumeStore();
  const [rows,setRows]=useState<Summary[]>([]);
  const [profileTitle,setProfileTitle]=useState("我的主简历");
  const [company,setCompany]=useState("");
@@ -29,6 +30,7 @@ export function HistoryStep() {
  const [error,setError]=useState("");
  const [working,setWorking]=useState(false);
  const [message,setMessage]=useState("");
+ const [restoreId,setRestoreId]=useState("");
  const refresh=useCallback(async()=>{
   const response=await fetch("/api/history",{cache:"no-store"});
   if(!response.ok)throw Error("读取历史失败");
@@ -43,7 +45,8 @@ export function HistoryStep() {
    const response=await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({profileId:currentProfileId||undefined,jobId:currentJobId||undefined,
       parentVersionId:parentVersionId||undefined,profileTitle,company,role:role||userInput.targetRole,
-      jdText:userInput.jobDescription,label,note,snapshot:draftResume,decisions:proposalDecisions})});
+      jdText:userInput.jobDescription,label,note,snapshot:draftResume,decisions:proposalDecisions,
+      workflow:{userInput,analysisResult,optimizeStyle}})});
    const result=await response.json();
    if(!response.ok)throw Error(result.error||"保存失败");
    markSaved(result.id,result.profileId,result.jobId);
@@ -61,12 +64,16 @@ export function HistoryStep() {
   }catch(e){setError((e as Error).message);}finally{setWorking(false);}
  }
  async function restore(id:string){
-  if(!window.confirm("从此历史版本建立新的编辑草稿？当前未保存的草稿将被替换，历史版本本身不会改变。"))return;
-  const response=await fetch("/api/history/"+encodeURIComponent(id),{cache:"no-store"});
-  const data=await response.json();
-  if(!response.ok){setError(data.error||"恢复失败");return;}
-  restoreVersion(data.snapshot,data.id,data.profileId,data.jobId,data.role);
-  setCurrentStep("final-resume");
+  setRestoreId("");
+  setWorking(true);setError("");
+  try{
+   const response=await fetch("/api/history/"+encodeURIComponent(id),{cache:"no-store"});
+   const data=await response.json();
+   if(!response.ok)throw Error(data.error||"恢复失败");
+   restoreVersion(data.snapshot,data.id,data.profileId,data.jobId,data.role,{
+    workflow:data.workflow,jobDescription:data.jobDescription,decisions:data.decisions,
+   });
+  }catch(e){setError((e as Error).message);}finally{setWorking(false);}
  }
  async function remove(id:string){
   if(!window.confirm("将该历史版本移入软删除状态？此操作不会删除线上简历应用。"))return;
@@ -76,6 +83,16 @@ export function HistoryStep() {
  const changes=comparison?compareResumeVersions(comparison.a.snapshot,comparison.b.snapshot):[];
  return <div className="space-y-6">
   <SectionTitle title="历史简历与版本对比" description="按岗位保存不可变版本；对比历史、恢复为新草稿，不覆盖旧版本" />
+  <Dialog open={!!restoreId} onOpenChange={open=>{if(!open)setRestoreId("");}}>
+   <DialogContent>
+    <DialogTitle>恢复历史版本为草稿？</DialogTitle>
+    <DialogDescription>当前未保存的草稿将被替换，历史版本本身不会改变。该版本已保存的分析过程和追问答案将一并恢复。</DialogDescription>
+    <div className="flex justify-end gap-2">
+     <Button variant="outline" onClick={()=>setRestoreId("")}>取消</Button>
+     <Button onClick={()=>void restore(restoreId)}>确认恢复</Button>
+    </div>
+   </DialogContent>
+  </Dialog>
   {error&&<p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
   {message&&<p role="status" className="rounded bg-green-50 p-3 text-sm text-green-700">{message}</p>}
   <Card><CardHeader><CardTitle>定稿并保存新版本</CardTitle></CardHeader><CardContent className="space-y-3">
@@ -97,8 +114,8 @@ export function HistoryStep() {
     <div><p className="font-medium text-sm">{row.profileTitle} / {row.role} / {row.company||"未指定公司"}</p>
      <p className="text-xs text-neutral-500">V{row.versionNo} · {row.label} · {new Date(row.createdAt).toLocaleString("zh-CN")}</p></div>
     <div className="flex gap-2">
-     <Button variant="outline" size="sm" onClick={()=>void restore(row.id)}>恢复为草稿</Button>
-     <Button variant="ghost" size="sm" onClick={()=>void remove(row.id)}>移除</Button>
+     <Button variant="outline" size="sm" disabled={working} onClick={()=>setRestoreId(row.id)}>恢复为草稿</Button>
+     <Button variant="ghost" size="sm" disabled={working} onClick={()=>void remove(row.id)}>移除</Button>
     </div>
    </div>)}</div>
   </CardContent></Card>

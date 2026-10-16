@@ -8,7 +8,7 @@ export async function GET(request:Request){
 }
 export async function POST(request:Request){
  const denied=await protectedRequest(request,true);if(denied)return denied;
- const oversized=checkPayload(request,180000);if(oversized)return oversized;
+ const oversized=checkPayload(request,1200000);if(oversized)return oversized;
  try {
   const body=await request.json();
   return NextResponse.json(saveVersion(body),{status:201});

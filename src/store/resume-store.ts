@@ -6,7 +6,10 @@ import type {
   StepStatus,
   UserInput,
   FinalResume,
+  ProposalDecisions,
+  RestoreContext,
 } from "@/types/resume";
+import { formatResumeAsText } from "../lib/utils.ts";
 import type { AIMode } from "@/lib/ai/types";
 
 const STEPS: StepId[] = [
@@ -27,7 +30,7 @@ interface ResumeStore {
   isAnalyzing: boolean;
   analysisResult: AnalysisResult | null;
   draftResume: FinalResume | null;
-  proposalDecisions: Record<string, { decision: "accepted" | "rejected" | "edited"; fieldPath: string; text: string; at: string }>;
+  proposalDecisions: ProposalDecisions;
   currentProfileId: string;
   currentJobId: string;
   parentVersionId: string;
@@ -40,14 +43,14 @@ interface ResumeStore {
   loadExampleData: () => void;
   setCurrentStep: (step: StepId) => void;
   setAnalyzing: (analyzing: boolean) => void;
-  setAnalysisResult: (result: AnalysisResult) => void;
+  setAnalysisResult: (result: AnalysisResult, preserveDraft?: boolean) => void;
   setOptimizedItems: (items: AnalysisResult["optimizedItems"]) => void;
   applyProposal: (id: string, path: string, text: string, edited?: boolean) => void;
   rejectProposal: (id: string) => void;
   setEvidenceNote: (fieldPath: string, note: string) => void;
   updateDraft: (path: string, text: string) => void;
   addBullet: (id: string, path: string, text: string) => void;
-  restoreVersion: (snapshot: FinalResume, versionId: string, profileId: string, jobId: string, role?: string) => void;
+  restoreVersion: (snapshot: FinalResume, versionId: string, profileId: string, jobId: string, role?: string, context?: RestoreContext) => void;
   markSaved: (versionId: string, profileId: string, jobId: string) => void;
   setAnalysisError: (error: string | null) => void;
   setAiMode: (mode: AIMode | null) => void;
@@ -154,11 +157,17 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
 
   setAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
 
-  setAnalysisResult: (result) => set({
-    analysisResult: result, draftResume: structuredClone(result.finalResume),
-    proposalDecisions: {}, currentProfileId:"",currentJobId:"",parentVersionId:"",
+  setAnalysisResult: (result, preserveDraft = false) => set((state) => ({
+    analysisResult: preserveDraft ? {
+      ...result,
+      // Rebuilt suggestions are new proposals; old decisions remain an audit record.
+      optimizedItems:result.optimizedItems.map(item=>({...item,id:`analysis:${crypto.randomUUID()}:${item.id}`})),
+      followUpQuestions:result.followUpQuestions.map(item=>({...item,id:`analysis:${crypto.randomUUID()}:${item.id}`})),
+    } : result,
+    draftResume: preserveDraft && state.draftResume ? state.draftResume : structuredClone(result.finalResume),
+    ...(preserveDraft ? {} : { proposalDecisions: {}, currentProfileId:"",currentJobId:"",parentVersionId:"" }),
     analysisError: null
-  }),
+  })),
   setOptimizedItems: (items) => set((state) => state.analysisResult
     ? {analysisResult:{...state.analysisResult,optimizedItems:items},proposalDecisions:{}}
     : {}),
@@ -201,9 +210,16 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
       decision:"accepted",fieldPath:path,text,at:new Date().toISOString()
     }}};
   }),
-  restoreVersion:(snapshot,versionId,profileId,jobId,role)=>set((state)=>({
-    draftResume:structuredClone(snapshot),analysisResult:null,proposalDecisions:{},
-    userInput:{...state.userInput,targetRole:role||state.userInput.targetRole},
+  restoreVersion:(snapshot,versionId,profileId,jobId,role,context)=>set(()=>({
+    draftResume:structuredClone(snapshot),
+    analysisResult:structuredClone(context?.workflow?.analysisResult ?? null),
+    proposalDecisions:structuredClone(context?.decisions ?? {}),
+    userInput:context?.workflow ? structuredClone(context.workflow.userInput) : {
+      ...defaultUserInput, targetRole:role || snapshot.jobIntent,
+      jobDescription:context?.jobDescription || "", originalResume:formatResumeAsText(snapshot),
+    },
+    optimizeStyle:context?.workflow?.optimizeStyle ?? "ai-product",
+    analysisError:null,
     parentVersionId:versionId,currentProfileId:profileId,currentJobId:jobId,currentStep:"final-resume"
   })),
   markSaved:(versionId,profileId,jobId)=>set({parentVersionId:versionId,currentProfileId:profileId,currentJobId:jobId}),
@@ -251,7 +267,7 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     }
 
     if(step==="history"||step==="sim-interview"||step==="model-settings"||step==="ai-usage") return currentStep===step?"active":"pending";
-    if(!analysisResult && (step==="final-resume" || step==="export" || step==="interview") && get().draftResume)
+    if(!analysisResult && STEPS.includes(step) && get().draftResume)
       return currentStep===step?"active":"pending";
     if (!analysisResult) return "disabled";
 

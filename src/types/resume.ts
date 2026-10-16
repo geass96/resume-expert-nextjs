@@ -151,6 +151,26 @@ export interface AnalysisResult {
   interviewPrep: InterviewPrep;
 }
 
+/** Context saved alongside an immutable resume, including editable follow-up answers. */
+export interface ResumeWorkflow {
+  userInput: UserInput;
+  analysisResult: AnalysisResult | null;
+  optimizeStyle: OptimizeStyle;
+}
+
+export type ProposalDecisions = Record<string, {
+  decision: "accepted" | "rejected" | "edited";
+  fieldPath: string;
+  text: string;
+  at: string;
+}>;
+
+export interface RestoreContext {
+  workflow?: ResumeWorkflow | null;
+  jobDescription?: string;
+  decisions?: ProposalDecisions;
+}
+
 export interface StepConfig {
   id: StepId;
   label: string;
