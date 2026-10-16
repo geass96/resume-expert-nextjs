@@ -11,6 +11,7 @@ import {
   GitCompare,
   MessageSquare,
   Sparkles,
+  Settings2,
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ const STEPS: { id: StepId; label: string; icon: React.ElementType }[] = [
   { id: "export", label: "导出结果", icon: Download },
   { id: "history", label: "历史版本", icon: ClipboardList },
   { id: "sim-interview", label: "模拟面试", icon: Brain },
+  { id: "model-settings", label: "模型配置", icon: Settings2 },
 ];
 
 export function StepSidebar() {
