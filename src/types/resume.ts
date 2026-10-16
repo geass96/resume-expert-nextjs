@@ -10,7 +10,8 @@ export type StepId =
   | "final-resume"
   | "interview"
   | "export"
-  | "history";
+  | "history"
+  | "sim-interview";
 
 export type StepStatus = "pending" | "active" | "completed" | "disabled";
 

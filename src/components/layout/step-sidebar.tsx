@@ -28,6 +28,7 @@ const STEPS: { id: StepId; label: string; icon: React.ElementType }[] = [
   { id: "interview", label: "面试准备", icon: Brain },
   { id: "export", label: "导出结果", icon: Download },
   { id: "history", label: "历史版本", icon: ClipboardList },
+  { id: "sim-interview", label: "模拟面试", icon: Brain },
 ];
 
 export function StepSidebar() {
