@@ -1,3 +1,5 @@
+> **v0.6.0:** Browser-first setup is now implemented. On your configured Windows PC, click the ChatGPT connection button in Model Settings; no manual command or SSH transfer is needed. See [CHATGPT-BROWSER-OAUTH.md](CHATGPT-BROWSER-OAUTH.md). The steps below are an optional legacy fallback.
+
 # Resume Expert · ChatGPT Plus/Pro SIWC 订阅连接
 
 ## 适用边界

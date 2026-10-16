@@ -81,3 +81,9 @@ src/
 
 提供 OpenAI 官方 Sign in with ChatGPT 的本机 OAuth → SSH 导入自托管 VM 流程，服务端加密令牌与自动刷新、模型列表与启用、正式 Responses API 流式调用及断开授权。公网 Web 端不伪造 OAuth 回调，且未获得用户授权时保持 Mock/API Key 模式。
 本机与 VPS 的授权步骤、安全限制、验收状态参阅 docs/CHATGPT-SUBSCRIPTION.md。真实订阅额度调用须本人明确授予 ChatGPT 计划使用许可并完成一次授权测试。
+
+## v0.6.0 - Browser-first ChatGPT OAuth
+
+The Model Settings page now offers a browser-based "Connect ChatGPT" entrypoint on the owners Windows PC. A localhost-only companion (127.0.0.1:46729) starts the official OAuth loopback authorization; after consent, its authenticated one-time pairing securely delivers verified credentials to the users self-hosted VPS via HTTPS. No user terminal commands, SSH commands, copied tokens, browser cookies, or paid API fallback are required.
+
+Windows helper is configured to launch on user sign-in; reinstall when moving the project to another PC. See docs/CHATGPT-BROWSER-OAUTH.md for architecture and security; docs/CHATGPT-SUBSCRIPTION.md remains a manual legacy fallback. Official authorization and plan usage must still be approved by the account owner.

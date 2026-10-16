@@ -95,6 +95,20 @@ try{
  assert.equal(noCredentials.status,400,"Cannot activate subscription without consent");
  const noModels=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"models"})});
  assert.equal(noModels.status,409,"Cannot read subscription catalog without consent");
+ assert.equal((await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})).status,401,"Pair creation must be private");
+ assert.equal((await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers:{...headers,Origin:"https://malicious.invalid"},body:"{}"})).status,403,"Pair creation must reject cross-origin requests");
+ const createdPair=await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers,body:"{}"});
+ assert.equal(createdPair.status,200,"Authorized browser pair starts");
+ const browserPair=await createdPair.json();
+ assert.match(browserPair.token,/^[A-Za-z0-9_-]{40,60}$/);
+ const badCompletion=await fetch(origin+"/api/chatgpt-subscription/pair/complete",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({token:browserPair.token,credential:{issuer:"https://wrong.invalid"}})
+ });
+ assert.equal(badCompletion.status,400,"Invalid OAuth material rejected");
+ const afterPair=await fetch(origin+"/api/chatgpt-subscription",{headers}).then(x=>x.json());
+ assert.equal(afterPair.connected,false,"Invalid OAuth import must not connect subscription");
+ console.log("PASS isolated HTTP: browser OAuth pairing, CSRF, rejection of fabricated credentials");
  console.log("PASS isolated HTTP: SIWC OAuth status, stable host, login and CSRF protections, no unauthorized activation");
  console.log("PASS isolated HTTP: mock interview, JD-backed session, pause/resume, 6 rounds, duplicate protection, replay, private API");
  console.log("PASS isolated HTTP: login, private UI/API, CSRF, version persistence, compare and introduction");
