@@ -1,0 +1,69 @@
+import { NextResponse } from "next/server";
+import { protectedRequest,checkPayload,limitAttempt } from "@/lib/auth";
+import { credentialsForModel,deleteModelSettings,listModelSettings,saveModelSettings,setActiveModel } from "@/lib/model-settings";
+
+export const runtime="nodejs";
+export async function GET(request:Request){
+  const denied=await protectedRequest(request);if(denied)return denied;
+  return NextResponse.json(listModelSettings(),{headers:{"Cache-Control":"no-store"}});
+}
+export async function POST(request:Request){
+  const denied=await protectedRequest(request,true);if(denied)return denied;
+  const tooLarge=checkPayload(request,6000);if(tooLarge)return tooLarge;
+  if(!limitAttempt("model-config",25))return NextResponse.json({error:"操作过于频繁"},{status:429});
+  try{
+    const body=await request.text();
+    if(body.length>6000)return NextResponse.json({error:"请求过大"},{status:413});
+    const action=JSON.parse(body);
+    if(!action||typeof action!=="object")throw Error("参数无效");
+    if(action.action==="save"){
+      if(typeof action.provider!=="string"||typeof action.model!=="string"||
+         (action.id!==undefined&&typeof action.id!=="string")||
+         (action.apiKey!==undefined&&typeof action.apiKey!=="string"))
+        throw Error("参数格式无效");
+      const id=saveModelSettings(action);
+      return NextResponse.json({ok:true,id});
+    }
+    if(action.action==="activate"){
+      if(typeof action.id!=="string"||action.id.length>100)throw Error("无效配置 ID");
+      setActiveModel(action.id);
+      return NextResponse.json({ok:true});
+    }
+    if(action.action==="mock"){
+      setActiveModel(null);
+      return NextResponse.json({ok:true});
+    }
+    if(action.action==="test"){
+      if(typeof action.id!=="string"||action.id.length>100)throw Error("无效配置 ID");
+      const config=credentialsForModel(action.id);
+      // Outgoing network requests are limited to hard-coded official provider URLs.
+      const response=await fetch(config.baseUrl+"/chat/completions",{
+        method:"POST",signal:AbortSignal.timeout(18000),
+        headers:{"Content-Type":"application/json",Authorization:"Bearer "+config.apiKey},
+        body:JSON.stringify({model:config.model,max_tokens:40,
+          messages:[{role:"system",content:"You are a connectivity probe."},{role:"user",content:"Reply with OK."}]}),
+      });
+      if(!response.ok)return NextResponse.json({ok:false,error:"服务返回 HTTP "+response.status},{status:422});
+      const parsed=await response.json() as {choices?:unknown[]};
+      if(!Array.isArray(parsed.choices)||!parsed.choices.length)
+        return NextResponse.json({ok:false,error:"服务返回格式不兼容"},{status:422});
+      return NextResponse.json({ok:true,message:"真实模型连接测试成功"});
+    }
+    throw Error("操作不支持");
+  }catch(e){
+    // Never include upstream response bodies, tokens or exception traces in responses.
+    const message=e instanceof Error && (/参数|配置|密钥|模型|供应商|请求|操作/.test(e.message))
+      ?e.message:"操作失败；请核对凭据和模型名称";
+    return NextResponse.json({error:message},{status:400});
+  }
+}
+export async function DELETE(request:Request){
+  const denied=await protectedRequest(request,true);if(denied)return denied;
+  try{
+    const raw=await request.text();
+    if(raw.length>1000)return NextResponse.json({error:"请求过长"},{status:413});
+    const {id}=JSON.parse(raw);
+    if(typeof id!=="string"||id.length>100)throw Error("ID 无效");
+    return deleteModelSettings(id)?NextResponse.json({ok:true}):NextResponse.json({error:"配置不存在"},{status:404});
+  }catch{return NextResponse.json({error:"删除失败"},{status:400});}
+}
