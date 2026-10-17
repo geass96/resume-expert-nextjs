@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { SectionTitle } from "@/components/shared/ui-helpers";
 import { ChatGPTSubscriptionPanel } from "@/components/steps/chatgpt-subscription-panel";
 import { useResumeStore } from "@/store/resume-store";
+import { fetchAIStatus } from "@/services/ai/resumeAgent";
 
 type Preset={label:string;baseUrl:string;suggested:string};
 type Profile={id:string;provider:string;model:string;active:boolean;hasKey:boolean;updatedAt:string};
 type ConfigData={providers:Record<string,Preset>;profiles:Profile[];mode:string;selectedId:string|null};
+type RuntimeStatus={mode:"mock"|"llm";model?:string;provider?:string;reason?:"missing_api_key"|"forced"};
 export function ModelSettingsStep(){
   const setCurrentStep=useResumeStore(state=>state.setCurrentStep);
   const [data,setData]=useState<ConfigData|null>(null);
+  const [runtimeStatus,setRuntimeStatus]=useState<RuntimeStatus|null>(null);
   const [provider,setProvider]=useState("openai");
   const [model,setModel]=useState("gpt-4o-mini");
   const [apiKey,setApiKey]=useState("");
@@ -23,6 +26,7 @@ export function ModelSettingsStep(){
     const r=await fetch("/api/model-settings",{cache:"no-store"});
     if(!r.ok)throw Error("模型配置读取失败");
     setData(await r.json());
+    try { setRuntimeStatus(await fetchAIStatus()); } catch { setRuntimeStatus(null); }
   }
   useEffect(()=>{
     let active=true;
@@ -30,6 +34,11 @@ export function ModelSettingsStep(){
       .then(async response=>{if(!response.ok)throw Error("模型配置读取失败");return response.json();})
       .then(value=>{if(active)setData(value);})
       .catch(e=>{if(active)setError(e.message);});
+    return ()=>{active=false;};
+  },[]);
+  useEffect(()=>{
+    let active=true;
+    fetchAIStatus().then(status=>{if(active)setRuntimeStatus(status);}).catch(()=>{if(active)setRuntimeStatus(null);});
     return ()=>{active=false;};
   },[]);
   async function action(operation:Record<string,unknown>,method="POST"){
@@ -58,7 +67,7 @@ export function ModelSettingsStep(){
     </CardContent></Card>
     <ChatGPTSubscriptionPanel />
     <Card><CardHeader><CardTitle>当前运行方式</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
-      <p>{data?.mode==="llm"?"已选择真实模型":data?.mode==="mock"?"手动模拟模式":data?.mode==="siwc"?"ChatGPT 订阅 OAuth（查看上方状态）":"沿用服务器环境变量 / Mock（尚未选定页面配置）"}</p>
+      <p>{data?.mode==="siwc"?`ChatGPT 订阅模型正在使用${runtimeStatus?.model?" · "+runtimeStatus.model:""}`:data?.mode==="llm"?`已启用 API Key 模型${runtimeStatus?.model?" · "+runtimeStatus.model:""}`:runtimeStatus?.mode==="mock"?"Mock 模拟模式（不会调用真实模型）":runtimeStatus?.mode==="llm"?`使用服务器环境变量模型 · ${runtimeStatus.provider||"兼容 API"} · ${runtimeStatus.model||"已配置"}`:"正在读取当前模型状态…"}</p>
       <Button variant="outline" disabled={busy} onClick={()=>void action({action:"mock"})}>切换到 Mock 模拟模式</Button>
       <p className="text-xs text-neutral-500">切换模型后，新发起的简历分析、建议改写和面试评价使用所选模型。此前已生成的记录不会自动重写。</p>
     </CardContent></Card>
@@ -87,7 +96,7 @@ export function ModelSettingsStep(){
       <p className="text-xs text-amber-800">pi 支持的 ChatGPT / Claude / Copilot 订阅 OAuth 登录，与 API Key 不是同一认证方式。本页面目前支持 OpenAI 兼容 API 及服务商套餐 Token；不能将 ChatGPT Plus 账号密码或 OAuth 回调码填入这里。</p>
     </CardContent></Card>
     <Card><CardHeader><CardTitle>已保存模型（{data?.profiles.length||0}）</CardTitle></CardHeader><CardContent className="space-y-3">
-      {!data?.profiles.length&&<p className="text-sm text-neutral-500">暂未配置任何模型，当前仍可使用 Mock 模式。</p>}
+      {!data?.profiles.length&&<p className="text-sm text-neutral-500">{data?.mode==="siwc"?"当前使用 ChatGPT 订阅模型；没有额外保存 API Key 模型。":data?.mode==="llm"?"当前使用已启用的 API Key 模型。":runtimeStatus?.mode==="llm"?"当前使用服务器环境变量配置的真实模型。":"尚未启用真实模型；如果没有服务器模型配置，将使用 Mock 模拟模式。"}</p>}
       {data?.profiles.map(p=><div key={p.id} className="border rounded p-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium text-sm">{providers[p.provider]?.label||p.provider} · {p.model}</p>

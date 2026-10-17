@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { protectedRequest,checkPayload,limitAttempt } from "@/lib/auth";
+import { protectedRequest, limitAttempt, readLimitedJson } from "@/lib/auth";
 import { disconnectSubscription,selectSubscription,subscriptionAccessToken,subscriptionStatus } from "@/lib/chatgpt-subscription";
+import { chatCompletionJSON } from "@/lib/ai/client";
+import { getAIConfig } from "@/lib/ai/config";
 
 export const runtime="nodejs";
 export async function GET(request:Request){
@@ -9,12 +11,24 @@ export async function GET(request:Request){
 }
 export async function POST(request:Request){
  const denied=await protectedRequest(request,true);if(denied)return denied;
- const oversized=checkPayload(request,2000);if(oversized)return oversized;
  if(!limitAttempt("siwc-operation",10))return NextResponse.json({error:"操作过于频繁"},{status:429});
+ const parsed = await readLimitedJson<{action?:string;model?:string}>(request, 2000, "请求过长", "请求格式错误");
+ if (!parsed.ok) return parsed.response;
  try{
-   const raw=await request.text();
-   if(raw.length>2000)return NextResponse.json({error:"请求过长"},{status:413});
-   const body=JSON.parse(raw) as {action?:string;model?:string};
+   const body=parsed.data;
+   if(body.action==="test"){
+     const status=subscriptionStatus(),config=getAIConfig();
+     if(!status.connected||!status.active||config.provider!=="chatgpt-siwc")
+       return NextResponse.json({error:"请先连接并启用 ChatGPT 订阅模型"},{status:409});
+     const result=await chatCompletionJSON<{ok?:unknown;message?:unknown}>({
+       system:"你是模型连通性测试器。只输出 JSON 对象，字段 ok 为 true，message 为连接成功。不要输出其他内容。",
+       user:"请返回 {\"ok\":true,\"message\":\"连接成功\"}。",
+       purpose:"model_connection_test",temperature:0,maxTokens:100,
+     });
+     if(result.ok!==true||typeof result.message!=="string"||!result.message.trim()||result.message.length>100)
+       return NextResponse.json({error:"模型已响应，但返回结构未通过验收"},{status:502});
+     return NextResponse.json({ok:true,model:config.model,message:"真实订阅模型调用成功"},{headers:{"Cache-Control":"no-store"}});
+   }
    if(body.action==="activate"&&typeof body.model==="string"){
      selectSubscription(body.model);
      return NextResponse.json({ok:true});

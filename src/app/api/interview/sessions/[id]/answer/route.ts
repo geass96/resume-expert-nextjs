@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
-import { protectedRequest,checkPayload,limitAttempt } from "@/lib/auth";
+import { protectedRequest, readLimitedJson, limitAttempt } from "@/lib/auth";
 import { getInterviewContext,readSession,saveRound } from "@/lib/interview-db";
 import { INTERVIEW_MAX_ROUNDS,mockRound,normalizeFeedback } from "@/lib/interview-engine";
 import { getAIConfig } from "@/lib/ai/config";
 import { chatCompletionJSON } from "@/lib/ai/client";
+import { validateInterviewResponse } from "@/lib/ai/response-validation";
 export const runtime="nodejs";
 export async function POST(request:Request,context:{params:Promise<{id:string}>}) {
   const denied=await protectedRequest(request,true);if(denied)return denied;
-  const oversized=checkPayload(request,10000);if(oversized)return oversized;
   if(!limitAttempt("interview-answer",14))return NextResponse.json({error:"请求过于频繁"},{status:429});
-  let body:{answer?:unknown;round?:unknown};
-  try{
-    const raw=await request.text();
-    if(raw.length>10000)return NextResponse.json({error:"回答内容过长"},{status:413});
-    body=JSON.parse(raw);
-  }catch{return NextResponse.json({error:"请求格式错误"},{status:400});}
+  const parsed = await readLimitedJson<{answer?:unknown;round?:unknown}>(request, 10000, "回答内容过长", "请求格式错误");
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
   if(typeof body.answer!=="string"||!body.answer.trim()||body.answer.length>6500||!Number.isInteger(body.round))
     return NextResponse.json({error:"请填写有效回答"},{status:400});
   const {id}=await context.params;
@@ -40,6 +37,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
         }).slice(0,19500),
         purpose:"interview_answer",maxTokens:1250
       });
+      validateInterviewResponse(raw, body.round < INTERVIEW_MAX_ROUNDS);
       const feedback=normalizeFeedback(raw,"llm");
       const nextQuestion=body.round>=INTERVIEW_MAX_ROUNDS?"":String(raw.nextQuestion||"").trim().slice(0,1000);
       if(!nextQuestion&&body.round<INTERVIEW_MAX_ROUNDS)throw Error("缺少后续追问");

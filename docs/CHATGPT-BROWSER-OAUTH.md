@@ -42,7 +42,8 @@
 3. 本机辅助程序：仅本地监听、页面响应、无权限启动失败、手动点击前不主动发起 ChatGPT 授权。
 4. GitHub ARM64：类型检查、Lint、单元、依赖审计、Next.js 构建、HTTP 集成与发布包。
 5. 生产：备份数据库、分目录部署、健康检查、无真实凭据的配对入口和私有接口安全检查、回滚目录。
-6. **待用户本人进行的最终验收：** 真实 OAuth 页面确认、实际模型列表及一次订阅 Responses API 调用。
+6. 模型配置页提供「测试当前订阅模型」按钮；点击后会发起一次真实 Responses API 请求，并在 AI 用量记录中留痕，可能消耗订阅额度。
+7. **待用户本人进行的最终验收：** 真实 OAuth 页面确认、实际模型列表及一次订阅 Responses API 调用。未获明确授权前，不自动执行真实订阅调用。
 
 官方参考：
 https://developers.openai.com/siwc/token-sharing-open-source/sign-in

@@ -69,18 +69,20 @@ export function ChatGPTSubscriptionPanel(){
      tab.close();setError((error as Error).message);
    }finally{setPending(false);}
  }
- async function action(type:"models"|"activate"|"disconnect"){
+ async function action(type:"models"|"activate"|"disconnect"|"test"){
    setPending(true);setError("");setNotice("");
    try{
      if(type==="disconnect"&&!window.confirm("确定断开 ChatGPT 订阅？将清除 VPS 上的授权凭据，并尝试撤销远程令牌。"))return;
      const response=await fetch("/api/chatgpt-subscription",{
        method:type==="disconnect"?"DELETE":"POST",
        headers:{"Content-Type":"application/json"},
-       ...(type==="disconnect"?{}:{body:JSON.stringify(type==="models"?{action:"models"}:{action:"activate",model})})
+       ...(type==="disconnect"?{}:{body:JSON.stringify(type==="models"?{action:"models"}:type==="test"?{action:"test"}:{action:"activate",model})})
      });
      const result=await response.json();
      if(!response.ok||!result.ok)throw Error(result.error||"操作失败");
-     if(type==="models"){
+     if(type==="test"){
+       setNotice(result.message||"真实订阅模型调用成功。");
+     }else if(type==="models"){
        setModels(result.models||[]);
        if(!model&&result.models?.[0])setModel(result.models[0].id);
        setNotice("已读取你的 ChatGPT 订阅账号可用模型。");
@@ -115,6 +117,7 @@ export function ChatGPTSubscriptionPanel(){
      {status?.connected&&<>
        <div className="flex gap-2 flex-wrap">
          <Button variant="outline" disabled={pending} onClick={()=>void action("models")}>读取订阅可用模型</Button>
+         {status.active&&<Button variant="outline" disabled={pending} onClick={()=>void action("test")}>测试当前订阅模型</Button>}
        </div>
        {models.length>0&&<label className="block">选择订阅模型
          <select aria-label="ChatGPT 订阅模型" className="mt-1 w-full rounded border p-2" value={model} onChange={e=>setModel(e.target.value)}>

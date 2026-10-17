@@ -32,8 +32,25 @@ try{
  assert.equal((await fetch(origin+"/api/analyze",{method:"POST",headers:{Origin:origin}})).status,401,"Anonymous cannot consume LLM");
  const login=await fetch(origin+"/api/auth/login",{method:"POST",headers:{Origin:origin,"Content-Type":"application/json"},body:JSON.stringify({password})});
  assert.equal(login.status,200,"Login must succeed");
+ const loginProbeHeaders={Origin:origin,"Content-Type":"application/json","CF-Connecting-IP":"192.0.2.55"};
+ for(let i=0;i<5;i++){
+   const response=await fetch(origin+"/api/auth/login",{method:"POST",
+     headers:{...loginProbeHeaders,"X-Forwarded-For":"198.51.100."+String(i+1)},
+     body:JSON.stringify({password:"synthetic-wrong-password"})});
+   assert.equal(response.status,401,"Changing X-Forwarded-For must not bypass per-client login limit");
+ }
+ const blockedLogin=await fetch(origin+"/api/auth/login",{method:"POST",
+   headers:{...loginProbeHeaders,"X-Forwarded-For":"203.0.113.200"},
+   body:JSON.stringify({password:"synthetic-wrong-password"})});
+ assert.equal(blockedLogin.status,429,"Sixth attempt from the same trusted client IP must be rate limited");
  const cookie=login.headers.get("set-cookie").split(";")[0];
  const headers={Cookie:cookie,Origin:origin,"Content-Type":"application/json"};
+ const oversizedJson=JSON.stringify({input:{targetRole:"synthetic role",jobDescription:"x",originalResume:"x"},padding:"x".repeat(121000)});
+ const oversizedStream=new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode(oversizedJson));controller.close();}});
+ const oversizedResponse=await fetch(origin+"/api/analyze",{method:"POST",headers,body:oversizedStream,duplex:"half"});
+ assert.equal(oversizedResponse.status,413,"Streaming request body without Content-Length must still be capped");
+ const malformedResponse=await fetch(origin+"/api/analyze",{method:"POST",headers,body:"{broken"});
+ assert.equal(malformedResponse.status,400,"Malformed JSON must be rejected as a client error");
  assert.equal((await fetch(origin+"/",{headers})).status,200);
  assert.equal((await fetch(origin+"/api/history",{headers})).status,200);
  const usage=await fetch(origin+"/api/ai/usage?days=30&page=1",{headers});
@@ -122,6 +139,8 @@ try{
  assert.equal(noCredentials.status,400,"Cannot activate subscription without consent");
  const noModels=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"models"})});
  assert.equal(noModels.status,409,"Cannot read subscription catalog without consent");
+ const noTest=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"test"})});
+ assert.equal(noTest.status,409,"Cannot run a real subscription inference before owner consent and model activation");
  assert.equal((await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})).status,401,"Pair creation must be private");
  assert.equal((await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers:{...headers,Origin:"https://malicious.invalid"},body:"{}"})).status,403,"Pair creation must reject cross-origin requests");
  const createdPair=await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers,body:"{}"});

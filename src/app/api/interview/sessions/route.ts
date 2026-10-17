@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { protectedRequest, checkPayload, limitAttempt } from "@/lib/auth";
+import { protectedRequest, readLimitedJson, limitAttempt } from "@/lib/auth";
 import { listSessions, startSession, getInterviewContext } from "@/lib/interview-db";
 import { firstQuestion, validKind } from "@/lib/interview-engine";
 import { getAIConfig } from "@/lib/ai/config";
@@ -12,13 +12,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const denied = await protectedRequest(request,true);
   if (denied) return denied;
-  const oversized = checkPayload(request,16000);
-  if (oversized) return oversized;
   if (!limitAttempt("interview-create",12)) return NextResponse.json({error:"启动过于频繁"},{status:429});
+  const parsed = await readLimitedJson<{versionId?:unknown;kind?:unknown}>(request, 16000, "请求过长", "请求格式错误");
+  if (!parsed.ok) return parsed.response;
   try {
-    const raw = await request.text();
-    if (raw.length > 16000) return NextResponse.json({error:"请求过长"},{status:413});
-    const body = JSON.parse(raw) as {versionId?:unknown;kind?:unknown};
+    const body = parsed.data;
     if (typeof body.versionId!=="string"||body.versionId.length>100||!validKind(body.kind))
       return NextResponse.json({error:"必须选择已保存的简历版本和面试类型"},{status:400});
     const version=getInterviewContext(body.versionId);
