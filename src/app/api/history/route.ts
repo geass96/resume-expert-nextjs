@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { protectedRequest,checkPayload } from "@/lib/auth";
+import { protectedRequest, readLimitedJson } from "@/lib/auth";
 import { listHistory,saveVersion } from "@/lib/history-db";
 export const runtime="nodejs";
 export async function GET(request:Request){
@@ -8,9 +8,9 @@ export async function GET(request:Request){
 }
 export async function POST(request:Request){
  const denied=await protectedRequest(request,true);if(denied)return denied;
- const oversized=checkPayload(request,1200000);if(oversized)return oversized;
+ const parsed = await readLimitedJson<Parameters<typeof saveVersion>[0]>(request, 1200000, "历史版本内容过长", "请求格式错误");
+ if (!parsed.ok) return parsed.response;
  try {
-  const body=await request.json();
-  return NextResponse.json(saveVersion(body),{status:201});
+  return NextResponse.json(saveVersion(parsed.data),{status:201});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"无法保存"},{status:400});}
 }

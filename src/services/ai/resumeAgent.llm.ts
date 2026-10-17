@@ -11,6 +11,7 @@ import {
   normalizeOptimizedItems,
 } from "@/lib/ai/prompts";
 import type { AnalysisResult, OptimizeStyle, UserInput } from "@/types/resume";
+import { validateAnalysisResult, validateGeneratedBullet, validateOptimizedItems } from "@/lib/ai/response-validation";
 
 type JDAnalysisResult = Pick<AnalysisResult, "jdAnalysis">;
 type DiagnosisMatchResult = Pick<
@@ -78,6 +79,7 @@ export async function runLLMResumeAnalysis(
     interviewPrep: interview.interviewPrep,
   };
 
+  validateAnalysisResult(raw);
   return normalizeAnalysisResult(raw, input);
 }
 
@@ -93,6 +95,7 @@ export async function runLLMRegenerateOptimizedItems(
     maxTokens: 4000,
   });
 
+  validateOptimizedItems(raw.optimizedItems);
   return normalizeOptimizedItems(raw.optimizedItems);
 }
 
@@ -110,5 +113,5 @@ export async function runLLMFollowUpBullet(
     maxTokens: 500,
   });
 
-  return raw.bullet?.trim() ?? "";
+  return validateGeneratedBullet(raw);
 }
