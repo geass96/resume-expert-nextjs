@@ -46,7 +46,7 @@ interface ResumeStore {
   setAnalysisResult: (result: AnalysisResult, preserveDraft?: boolean) => void;
   setOptimizedItems: (items: AnalysisResult["optimizedItems"]) => void;
   applyProposal: (id: string, path: string, text: string, edited?: boolean) => void;
-  rejectProposal: (id: string) => void;
+  rejectProposal: (id: string, path?: string) => boolean;
   setEvidenceNote: (fieldPath: string, note: string) => void;
   updateDraft: (path: string, text: string) => void;
   addBullet: (id: string, path: string, text: string) => void;
@@ -169,7 +169,9 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     analysisError: null
   })),
   setOptimizedItems: (items) => set((state) => state.analysisResult
-    ? {analysisResult:{...state.analysisResult,optimizedItems:items},proposalDecisions:{}}
+    ? {analysisResult:{...state.analysisResult,optimizedItems:items.map(item=>({
+      ...item,id:`optimization:${crypto.randomUUID()}:${item.id}`,
+    }))}}
     : {}),
   updateDraft: (path,text) => set((state) => {
     if(!state.draftResume)return {};
@@ -185,14 +187,62 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
   applyProposal: (id,path,text,edited=false) => set((state)=>{
     if(!state.draftResume)return {};
     const draft=structuredClone(state.draftResume);
+    const previous=readDraft(draft,path);
     if(!writeDraft(draft,path,text))return {};
-    return {draftResume:draft,proposalDecisions:{...state.proposalDecisions,[id]:{
-      decision:edited?"edited":"accepted",fieldPath:path,text,at:new Date().toISOString()
+    const proposal=state.analysisResult?.optimizedItems.find(item=>item.id===id);
+    const prior=state.proposalDecisions[id];
+    const beforeProposalId=prior?.fieldPath===path && prior.decision==="accepted" && prior.applied!==false
+      ?prior.beforeProposalId:Object.entries(state.proposalDecisions).find(([key,decision])=>
+        key!==id && decision.fieldPath===path && decision.decision==="accepted" && decision.applied===true && decision.text===previous)?.[0];
+    const beforeText=prior?.fieldPath===path && prior.decision==="accepted" && prior.applied!==false
+      ? prior.beforeText ?? proposal?.before ?? previous
+      : proposal && previous===proposal.after ? proposal.before : previous;
+    const decisions={...state.proposalDecisions};
+    for(const [key,decision] of Object.entries(decisions))
+      if(key!==id && !key.startsWith("evidence:") && decision.fieldPath===path && decision.decision!=="rejected")
+        decisions[key]={...decision,applied:false};
+    return {draftResume:draft,proposalDecisions:{...decisions,[id]:{
+      decision:edited?"edited":"accepted",fieldPath:path,text,at:new Date().toISOString(),beforeText,applied:true,beforeProposalId,
     }}};
   }),
-  rejectProposal: (id)=>set((state)=>({proposalDecisions:{...state.proposalDecisions,[id]:{
-    decision:"rejected",fieldPath:"",text:"",at:new Date().toISOString()
-  }}})),
+  rejectProposal: (id,path)=>{
+    const state=get(),proposal=state.analysisResult?.optimizedItems.find(item=>item.id===id);
+    const prior=state.proposalDecisions[id];
+    const target=prior?.decision!=="rejected" && prior?.fieldPath ? prior.fieldPath : path;
+    if(!state.draftResume || !proposal || !target)return false;
+    const draft=structuredClone(state.draftResume),current=readDraft(draft,target);
+    if(current===undefined)return false;
+    if(!prior && current!==proposal.after && current!==proposal.before)return false;
+    // Undo only the selected field while it still contains this suggestion.
+    // A later manual edit or another proposal must never be overwritten.
+    const applied=prior?.fieldPath===target && prior.decision==="accepted";
+    const anotherOwnsField=Object.entries(state.proposalDecisions).some(([key,decision])=>
+      key!==id && !key.startsWith("evidence:") && decision.fieldPath===target &&
+      decision.decision==="accepted" && (decision.applied===true||decision.applied===undefined && decision.at>(prior?.at??"")));
+    if(anotherOwnsField)return false;
+    const beforeText=prior?.beforeText??proposal.before;
+    const decisions={...state.proposalDecisions};
+    if(prior?.decision!=="edited" &&
+      (applied ? current===prior.text : current===proposal.after)){
+      // Old decisions can overlap; do not silently resurrect rejected content.
+      const rejectedBaseline=Object.entries(state.proposalDecisions).some(([key,decision])=>
+        key!==id && decision.fieldPath===target && decision.decision==="rejected" &&
+        (!decision.text||decision.text===beforeText));
+      if(rejectedBaseline)return false;
+      writeDraft(draft,target,beforeText);
+      const predecessors=Object.entries(decisions).filter(([key,decision])=>
+        key!==id && decision.fieldPath===target && decision.decision==="accepted" && decision.text===beforeText);
+      const predecessor=prior?.beforeProposalId
+        ?predecessors.find(([key])=>key===prior.beforeProposalId)
+        :predecessors.length===1?predecessors[0]:undefined;
+      if(predecessor)decisions[predecessor[0]]={...predecessor[1],applied:true};
+    }
+    set({draftResume:draft,proposalDecisions:{...decisions,[id]:{
+      decision:"rejected",fieldPath:target,text:prior?.text||proposal.after,at:new Date().toISOString(),
+      beforeText,applied:false,beforeProposalId:prior?.beforeProposalId,
+    }}});
+    return true;
+  },
   setEvidenceNote: (fieldPath,note)=>set(state=>({
     proposalDecisions:{...state.proposalDecisions,["evidence:"+fieldPath]:{
       decision:"edited",fieldPath,text:note.slice(0,1500),at:new Date().toISOString()
@@ -200,12 +250,15 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
   })),
   addBullet: (id,path,text)=>set((state)=>{
     if(!state.draftResume||!text.trim())return {};
+    const prior=state.proposalDecisions[id];
+    if(prior?.decision==="accepted"||prior?.decision==="edited")return {};
     const draft=structuredClone(state.draftResume);
     const match=/^(work|project):(\d+)$/.exec(path);
     if(!match)return {};
     const list=match[1]==="work"?draft.workExperience:draft.projectExperience;
     if(!list[Number(match[2])])return {};
-    list[Number(match[2])].bullets.push(text.trim());
+    if(!list[Number(match[2])].bullets.some(bullet=>bullet.trim()===text.trim()))
+      list[Number(match[2])].bullets.push(text.trim());
     return {draftResume:draft,proposalDecisions:{...state.proposalDecisions,[id]:{
       decision:"accepted",fieldPath:path,text,at:new Date().toISOString()
     }}};
@@ -214,7 +267,10 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     draftResume:structuredClone(snapshot),
     analysisResult:structuredClone(context?.workflow?.analysisResult ?? null),
     proposalDecisions:structuredClone(context?.decisions ?? {}),
-    userInput:context?.workflow ? structuredClone(context.workflow.userInput) : {
+    userInput:context?.workflow ? {
+      ...structuredClone(context.workflow.userInput),targetRole:role||context.workflow.userInput.targetRole,
+      jobDescription:context.jobDescription??context.workflow.userInput.jobDescription,
+    } : {
       ...defaultUserInput, targetRole:role || snapshot.jobIntent,
       jobDescription:context?.jobDescription || "", originalResume:formatResumeAsText(snapshot),
     },
@@ -281,8 +337,21 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
 
 
 // Field paths are generated from explicit visible fields, never inferred from LLM strings.
+function readDraft(draft:FinalResume,path:string):string|undefined {
+ if(path==="summary")return draft.summary;
+ if(path==="jobIntent")return draft.jobIntent;
+ if(path==="coreSkills"||path==="skillsAndTools")return draft[path].join("、");
+ const match=/^(work|project):(\d+):(\d+)$/.exec(path);
+ if(!match)return undefined;
+ const list=match[1]==="work"?draft.workExperience:draft.projectExperience;
+ return list[Number(match[2])]?.bullets[Number(match[3])];
+}
 function writeDraft(draft:FinalResume,path:string,text:string):boolean {
  if(path==="summary"){draft.summary=text;return true;}
+ if(path==="jobIntent"){draft.jobIntent=text;return true;}
+ if(path==="coreSkills"||path==="skillsAndTools"){
+   draft[path]=text.split(/[、\n]/).map(item=>item.trim()).filter(Boolean);return true;
+ }
  const match=/^(work|project):(\d+):(\d+)$/.exec(path);
  if(!match)return false;
  const list=match[1]==="work"?draft.workExperience:draft.projectExperience;

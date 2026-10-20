@@ -39,35 +39,50 @@ export function getVersion(id:string):VersionRow|null {
 }
 export function saveVersion(input:{
  profileId?:string;jobId?:string;parentVersionId?:string;
- profileTitle:string;company:string;role:string;jdText:string;label:string;note:string;
+ profileTitle:string;company?:string;role:string;jdText:string;label:string;note:string;
  snapshot:FinalResume;decisions:Record<string,unknown>;
  workflow?:ResumeWorkflow|null;
 }) {
   const db=historyDb(),json=JSON.stringify(input.snapshot),decisions=JSON.stringify(input.decisions||{});
   if(json.length>90000||decisions.length>60000)throw Error("简历内容超过大小限制");
-  const workflow=input.workflow ? JSON.stringify(input.workflow) : null;
+  const workflow=input.workflow ? JSON.stringify({
+    ...input.workflow,userInput:{...input.workflow.userInput,targetRole:input.role.trim()},
+  }) : null;
   if(workflow && workflow.length>240000)throw Error("分析过程超过大小限制");
   if(input.workflow)validateWorkflow(input.workflow);
   if(!input.snapshot||!Array.isArray(input.snapshot.workExperience)||!Array.isArray(input.snapshot.projectExperience)||!input.snapshot.personalInfo)throw Error("简历结构无效");
-  if(!input.profileTitle.trim()||!input.role.trim()||input.profileTitle.length>100||input.role.length>160||input.company.length>150||input.label.length>100||input.jdText.length>50000)throw Error("简历标题或岗位无效");
-  const profileId=input.profileId||randomUUID(),jobId=input.jobId||randomUUID();
+  if(!input.profileTitle.trim()||!input.role.trim()||input.profileTitle.length>100||input.role.length>160||(input.company?.length??0)>150||input.label.length>100||input.jdText.length>50000)throw Error("简历标题或岗位无效");
+  const profileId=input.profileId||randomUUID();
+  let jobId=input.jobId||randomUUID(),parentVersionId=input.parentVersionId||null;
+  let company=input.company?.trim()??"";
+  const jdText=input.workflow?.userInput.jobDescription??input.jdText;
+  if(jdText.length>50000)throw Error("岗位 JD 超过大小限制");
+  let forkedJob=false;
   const timestamp=new Date().toISOString(), id=randomUUID(),hash=createHash("sha256").update(json).digest("hex");
   db.exec("BEGIN IMMEDIATE");
   try {
     if(input.profileId) {
       if(!db.prepare("SELECT 1 FROM resume_profiles WHERE id=?").get(profileId))throw Error("主简历不存在");
     } else db.prepare("INSERT INTO resume_profiles VALUES(?,?,?)").run(profileId,input.profileTitle.trim(),timestamp);
-    if(input.jobId) {
-      if(!db.prepare("SELECT 1 FROM job_targets WHERE id=? AND profile_id=?").get(jobId,profileId))throw Error("岗位版本关联不一致");
-    } else db.prepare("INSERT INTO job_targets VALUES(?,?,?,?,?,?)").run(jobId,profileId,input.company.trim(),input.role.trim(),input.jdText.slice(0,50000),timestamp);
     if(input.parentVersionId) {
       if(!db.prepare("SELECT 1 FROM resume_versions WHERE id=? AND job_id=?").get(input.parentVersionId,jobId))throw Error("父版本不属于此岗位");
     }
+    if(input.jobId) {
+      const prior=db.prepare("SELECT company,role,jd_text FROM job_targets WHERE id=? AND profile_id=?").get(jobId,profileId) as
+        {company:string;role:string;jd_text:string}|undefined;
+      if(!prior)throw Error("岗位版本关联不一致");
+      if(input.company===undefined)company=prior.company;
+      if(prior.company!==company||prior.role!==input.role.trim()||prior.jd_text!==jdText){
+        jobId=randomUUID();parentVersionId=null;forkedJob=true;
+      }
+    }
+    if(!input.jobId||forkedJob)
+      db.prepare("INSERT INTO job_targets VALUES(?,?,?,?,?,?)").run(jobId,profileId,company,input.role.trim(),jdText,timestamp);
     const no=(db.prepare("SELECT coalesce(max(version_no),0)+1 AS number FROM resume_versions WHERE job_id=?").get(jobId) as {number:number}).number;
     db.prepare("INSERT INTO resume_versions(id,job_id,version_no,parent_version_id,snapshot_json,decisions_json,content_hash,label,note,created_at,workflow_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
-      .run(id,jobId,no,input.parentVersionId||null,json,decisions,hash,input.label.trim()||("版本 V"+no),input.note.slice(0,1000),timestamp,workflow);
+      .run(id,jobId,no,parentVersionId,json,decisions,hash,input.label.trim()||("版本 V"+no),input.note.slice(0,1000),timestamp,workflow);
     db.exec("COMMIT");
-    return {id,profileId,jobId,versionNo:no,contentHash:hash,createdAt:timestamp};
+    return {id,profileId,jobId,versionNo:no,contentHash:hash,createdAt:timestamp,forkedJob};
   }catch(error){db.exec("ROLLBACK");throw error;}
 }
 function validateWorkflow(workflow:ResumeWorkflow) {

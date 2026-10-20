@@ -2,7 +2,6 @@
 
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { EmptyState, SectionTitle } from "@/components/shared/ui-helpers";
@@ -46,7 +45,9 @@ export function FinalResumeStep() {
             <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">
               求职意向
             </h4>
-            <p className="text-sm">{finalResume.jobIntent}</p>
+            <textarea aria-label="编辑求职意向" value={finalResume.jobIntent}
+              onChange={e=>updateDraft("jobIntent",e.target.value)}
+              className="w-full border rounded-md p-2 text-sm" rows={1} />
           </section>
 
           <section className="mb-5">
@@ -62,13 +63,10 @@ export function FinalResumeStep() {
             <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">
               核心能力
             </h4>
-            <div className="flex flex-wrap gap-1.5">
-              {finalResume.coreSkills.map((s) => (
-                <Badge key={s} variant="secondary" className="font-normal">
-                  {s}
-                </Badge>
-              ))}
-            </div>
+            <textarea aria-label="编辑核心能力" value={finalResume.coreSkills.join("、")}
+              onChange={e=>updateDraft("coreSkills",e.target.value)}
+              className="w-full border rounded-md p-2 text-sm" rows={2} />
+            <p className="text-xs text-neutral-500">各项用顿号或换行分隔。</p>
           </section>
 
           <section className="mb-5">
@@ -131,7 +129,10 @@ export function FinalResumeStep() {
             <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">
               技能工具
             </h4>
-            <p className="text-sm text-neutral-600">{finalResume.skillsAndTools.join(" · ")}</p>
+            <textarea aria-label="编辑技能工具" value={finalResume.skillsAndTools.join("、")}
+              onChange={e=>updateDraft("skillsAndTools",e.target.value)}
+              className="w-full border rounded-md p-2 text-sm" rows={2} />
+            <p className="text-xs text-neutral-500">各项用顿号或换行分隔。</p>
           </section>
 
           <section>

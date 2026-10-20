@@ -41,6 +41,7 @@ export function OptimizeStep() {
   } = useResumeStore();
   const [regenerating, setRegenerating] = useState(false);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
+  const [targets, setTargets] = useState<Record<string,string>>({});
 
   if (!analysisResult) {
     return <EmptyState message="请先完成输入材料并开始分析" />;
@@ -87,7 +88,7 @@ export function OptimizeStep() {
       </div>
 
       {optimizeError && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {optimizeError}
         </div>
       )}
@@ -122,14 +123,16 @@ export function OptimizeStep() {
                   <TableCell>
                     <span className="text-amber-700">{item.riskWarning}</span>
                     <p className="mt-2 text-xs">决策：{proposalDecisions[item.id]?.decision || "待确认"}</p>
-                    <label className="block mt-2 text-xs" htmlFor={"target-"+item.id}>采纳位置</label>
+                    <label className="block mt-2 text-xs" htmlFor={"target-"+item.id}>采纳 / 拒绝位置</label>
                     <select id={"target-"+item.id} className="w-full border rounded p-1 text-xs"
-                      defaultValue="" onChange={(event)=>{
-                        const target=event.currentTarget.value;
-                        event.currentTarget.dataset.target=target;
-                      }}>
+                      value={targets[item.id]??proposalDecisions[item.id]?.fieldPath??""}
+                      disabled={proposalDecisions[item.id]?.decision==="accepted"||proposalDecisions[item.id]?.decision==="edited"}
+                      onChange={event=>setTargets({...targets,[item.id]:event.currentTarget.value})}>
                       <option value="">请选择目标条目</option>
                       <option value="summary">职业摘要</option>
+                      <option value="jobIntent">求职意向</option>
+                      <option value="coreSkills">核心能力（整项）</option>
+                      <option value="skillsAndTools">技能工具（整项）</option>
                       {draftResume?.workExperience.flatMap((w,i)=>w.bullets.map((b,j)=>(
                         <option key={"w"+i+"-"+j} value={"work:"+i+":"+j}>{w.company} · 工作条目 {j+1}</option>
                       )))}
@@ -139,13 +142,19 @@ export function OptimizeStep() {
                     </select>
                     <div className="flex gap-2 mt-2">
                       <Button size="sm" variant="outline" onClick={()=>{
-                        const el=document.getElementById("target-"+item.id) as HTMLSelectElement|null;
-                        if(!el?.value){window.alert("请先选择采纳位置");return;}
-                        applyProposal(item.id,el.value,item.after);
+                        const target=targets[item.id]||proposalDecisions[item.id]?.fieldPath;
+                        if(!target){setOptimizeError("请先选择该建议对应的简历条目");return;}
+                        setOptimizeError(null);
+                        applyProposal(item.id,target,item.after);
                       }}>采纳</Button>
-                      <Button size="sm" variant="ghost" onClick={()=>rejectProposal(item.id)}>拒绝</Button>
+                      <Button size="sm" variant="ghost" onClick={()=>{
+                        if(!rejectProposal(item.id,targets[item.id]||proposalDecisions[item.id]?.fieldPath)){
+                          setOptimizeError("请选择对应条目；同一位置采纳多条建议时，先撤回后来采纳的建议。内容不一致时请到最终简历人工核对，本次未标记为拒绝");return;
+                        }
+                        setOptimizeError(null);
+                      }}>拒绝</Button>
                     </div>
-                    <p className="mt-2 text-xs text-neutral-500">需要修改措辞时，请先进入最终简历编辑后再定稿。</p>
+                    <p className="mt-2 text-xs text-neutral-500">拒绝会撤回所选条目中仍保留的建议文案；之后的人工编辑会保留。</p>
                   </TableCell>
                 </TableRow>
               ))}
