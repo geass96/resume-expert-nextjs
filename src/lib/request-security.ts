@@ -5,10 +5,11 @@ export type ParsedJsonResult<T> =
   | { ok: false; status: 400 | 413; message: string };
 
 /**
- * Only trust Cloudflare's single-client address header, never the caller-controlled
- * X-Forwarded-For chain. The origin must not be directly reachable around Cloudflare.
+ * Single-owner limits share a bucket by default. Cloudflare's address is trusted
+ * only after the operator explicitly enables it behind a verified origin guard.
  */
 export function rateLimitClientKey(request: Request): string {
+  if(process.env.RESUME_TRUST_CLOUDFLARE_IP!=="true")return "unknown";
   const address = request.headers.get("cf-connecting-ip")?.trim();
   return address && isIP(address) ? address.toLowerCase() : "unknown";
 }
@@ -60,7 +61,10 @@ export async function parseLimitedJson<T>(
     }
 
     try {
-      return { ok: true, data: JSON.parse(text) as T };
+      const data:unknown=JSON.parse(text);
+      if(!data||typeof data!=="object"||Array.isArray(data))
+        return {ok:false,status:400,message:invalidMessage};
+      return { ok: true, data: data as T };
     } catch {
       return { ok: false, status: 400, message: invalidMessage };
     }

@@ -43,6 +43,13 @@ function validateBullets(value: unknown, path: string): void {
 }
 
 export function validateAnalysisResult(value: unknown): asserts value is AnalysisResult {
+  validateJDAnalysisResult(value);
+  validateDiagnosisMatchResult(value);
+  validateResumeOutputResult(value);
+  validateInterviewPrepResult(value);
+}
+
+export function validateJDAnalysisResult(value:unknown):asserts value is Pick<AnalysisResult,"jdAnalysis"> {
   const root = object(value, "root");
   const jd = object(root.jdAnalysis, "jdAnalysis");
   for (const key of ["responsibilities", "hardRequirements", "implicitRequirements", "keywords"]) {
@@ -56,6 +63,10 @@ export function validateAnalysisResult(value: unknown): asserts value is Analysi
     }
   }
 
+}
+
+export function validateDiagnosisMatchResult(value:unknown):asserts value is Pick<AnalysisResult,"diagnosis"|"matchItems"|"followUpQuestions"> {
+  const root=object(value,"root");
   const diagnosis = object(root.diagnosis, "diagnosis");
   score(diagnosis.overallScore, "diagnosis.overallScore");
   for (const [index, item] of recordArray(diagnosis.dimensionScores, "diagnosis.dimensionScores", 30).entries()) {
@@ -83,6 +94,10 @@ export function validateAnalysisResult(value: unknown): asserts value is Analysi
     if (item.id !== undefined) string(item.id, "followUpQuestions[" + index + "].id");
   }
 
+}
+
+export function validateResumeOutputResult(value:unknown):asserts value is Pick<AnalysisResult,"optimizedItems"|"finalResume"> {
+  const root=object(value,"root");
   const proposals = recordArray(root.optimizedItems, "optimizedItems", 10);
   if (proposals.length < 5) throw new Error("模型返回结构无效：简历优化建议至少需要 5 条");
   for (const [index, item] of proposals.entries()) {
@@ -107,6 +122,10 @@ export function validateAnalysisResult(value: unknown): asserts value is Analysi
   const education = object(resume.education, "finalResume.education");
   requiredStrings(education, ["school", "degree", "period"], "finalResume.education");
 
+}
+
+export function validateInterviewPrepResult(value:unknown):asserts value is Pick<AnalysisResult,"interviewPrep"> {
+  const root=object(value,"root");
   const interview = object(root.interviewPrep, "interviewPrep");
   const likely = recordArray(interview.likelyQuestions, "interviewPrep.likelyQuestions", 30);
   if (likely.length !== 10) throw new Error("模型返回结构无效：面试准备必须包含 10 条问题");

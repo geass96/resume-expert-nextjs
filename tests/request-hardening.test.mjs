@@ -18,6 +18,9 @@ function streamedRequest(text, headers = {}) {
 }
 
 test("rate limit identity trusts a valid Cloudflare client IP, not X-Forwarded-For", () => {
+  const prior=process.env.RESUME_TRUST_CLOUDFLARE_IP;
+  process.env.RESUME_TRUST_CLOUDFLARE_IP="true";
+  try {
   const first = new Request("https://example.test", {
     headers: { "cf-connecting-ip": "203.0.113.10", "x-forwarded-for": "198.51.100.1" },
   });
@@ -30,6 +33,24 @@ test("rate limit identity trusts a valid Cloudflare client IP, not X-Forwarded-F
   assert.equal(rateLimitClientKey(first), "203.0.113.10");
   assert.equal(rateLimitClientKey(spoofed), rateLimitClientKey(first));
   assert.notEqual(rateLimitClientKey(differentClient), rateLimitClientKey(first));
+  } finally {
+    if(prior===undefined)delete process.env.RESUME_TRUST_CLOUDFLARE_IP;
+    else process.env.RESUME_TRUST_CLOUDFLARE_IP=prior;
+  }
+});
+
+test("direct-origin headers cannot vary the default single-owner rate-limit bucket", () => {
+  const prior=process.env.RESUME_TRUST_CLOUDFLARE_IP;
+  delete process.env.RESUME_TRUST_CLOUDFLARE_IP;
+  try {
+    const first=new Request("https://example.test",{headers:{"cf-connecting-ip":"203.0.113.10"}});
+    const spoofed=new Request("https://example.test",{headers:{"cf-connecting-ip":"203.0.113.11","x-forwarded-for":"198.51.100.2"}});
+    assert.equal(rateLimitClientKey(first),"unknown");
+    assert.equal(rateLimitClientKey(spoofed),rateLimitClientKey(first));
+  } finally {
+    if(prior===undefined)delete process.env.RESUME_TRUST_CLOUDFLARE_IP;
+    else process.env.RESUME_TRUST_CLOUDFLARE_IP=prior;
+  }
 });
 
 test("invalid or missing Cloudflare client IP does not fall back to spoofable X-Forwarded-For", () => {
@@ -70,4 +91,12 @@ test("request body reader accepts valid bounded JSON", async () => {
   const result = await parseLimitedJson(streamedRequest(JSON.stringify({ ok: true })), 100, "too large", "invalid");
   assert.equal(result.ok, true);
   if (result.ok) assert.deepEqual(result.data, { ok: true });
+});
+
+test("JSON API bodies must be objects and invalid responses never contain private input",async()=>{
+  for(const value of ["null","[]",'"FAKE_PII"',"123","FAKE_PII_NOT_JSON"]){
+    const result=await parseLimitedJson(streamedRequest(value),100,"too large","invalid");
+    assert.deepEqual(result,{ok:false,status:400,message:"invalid"});
+    assert(!JSON.stringify(result).includes("FAKE_PII"));
+  }
 });

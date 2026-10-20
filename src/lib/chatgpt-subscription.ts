@@ -43,10 +43,10 @@ function decrypt(encoded:string){
  decipher.setAuthTag(Buffer.from(chunks[1],"base64url"));
  return Buffer.concat([decipher.update(Buffer.from(chunks[2],"base64url")),decipher.final()]).toString("utf8");
 }
-function readConnection():{value:SiwcRecord;model:string}|null{
+function readConnection():{value:SiwcRecord;model:string;revision:string}|null{
  const row=database().prepare("SELECT encrypted_json,model FROM chatgpt_subscription WHERE singleton=1").get() as
    {encrypted_json:string;model:string}|undefined;
- return row?{value:JSON.parse(decrypt(row.encrypted_json)),model:row.model}:null;
+ return row?{value:JSON.parse(decrypt(row.encrypted_json)),model:row.model,revision:row.encrypted_json}:null;
 }
 function writeConnection(value:SiwcRecord,model:string){
  database().prepare("INSERT INTO chatgpt_subscription(singleton,encrypted_json,model,updated_at) VALUES(1,?,?,?) ON CONFLICT(singleton) DO UPDATE SET encrypted_json=excluded.encrypted_json,model=excluded.model,updated_at=excluded.updated_at")
@@ -84,7 +84,9 @@ export function selectSubscription(model:string){
  if(!modelValid(model))throw new Error("模型 ID 无效");
  const record=readConnection();
  if(!record)throw new Error("尚未完成 ChatGPT 订阅授权导入");
- writeConnection(record.value,model);
+ // Selecting a model does not replace the credentials a refresh is updating.
+ database().prepare("UPDATE chatgpt_subscription SET model=?,updated_at=? WHERE singleton=1")
+   .run(model,new Date().toISOString());
  database().prepare("INSERT INTO model_selection(singleton,selected_id,mode) VALUES(1,NULL,'siwc') ON CONFLICT(singleton) DO UPDATE SET selected_id=NULL,mode='siwc'").run();
 }
 export function selectedSubscription(){
@@ -101,12 +103,12 @@ export async function subscriptionAccessToken(force=false):Promise<string>{
  if(!force && age<current.value.expires_in-180)return current.value.access_token;
  return refresh(force);
 }
-let inflight:Promise<string>|undefined;
+let inflight:{revision:string;promise:Promise<string>}|undefined;
 function refresh(force:boolean):Promise<string>{
- if(inflight)return inflight;
- inflight=(async()=>{
-   const current=readConnection();
-   if(!current)throw Error("订阅已断开");
+ const current=readConnection();
+ if(!current)return Promise.reject(new Error("订阅已断开"));
+ if(inflight?.revision===current.revision)return inflight.promise;
+ const promise:Promise<string>=(async()=>{
    const age=(Date.now()-Date.parse(current.value.saved_at))/1000;
    if(!force && age<current.value.expires_in-180)return current.value.access_token;
    const form=new URLSearchParams({grant_type:"refresh_token",client_id:current.value.client_id,
@@ -121,14 +123,29 @@ function refresh(force:boolean):Promise<string>{
    const updated:SiwcRecord={...current.value,access_token:json.access_token,
      refresh_token:json.refresh_token,expires_in:json.expires_in||3600,scope:json.scope||current.value.scope,
      saved_at:new Date().toISOString()};
-   writeConnection(updated,current.model);
+   // Compare the persisted credential revision, including across processes.
+   // A disconnect or account import must invalidate this pending response.
+   const saved=database().prepare("UPDATE chatgpt_subscription SET encrypted_json=?,updated_at=? WHERE singleton=1 AND encrypted_json=?")
+     .run(encrypt(JSON.stringify(updated)),new Date().toISOString(),current.revision);
+   if(saved.changes!==1)throw new Error("订阅连接已变更，请重新尝试");
    return json.access_token;
- })().finally(()=>{inflight=undefined;});
- return inflight;
+ })().finally(()=>{if(inflight?.promise===promise)inflight=undefined;});
+ inflight={revision:current.revision,promise};
+ return promise;
 }
 export async function disconnectSubscription(){
  const current=readConnection();
  if(!current)return {revoked:true};
+ // Remove local authorization before any network wait. A later import then
+ // belongs to a new connection and cannot be deleted by this revocation.
+ const db=database();
+ db.exec("BEGIN IMMEDIATE");
+ try {
+   const removed=db.prepare("DELETE FROM chatgpt_subscription WHERE singleton=1 AND encrypted_json=?").run(current.revision);
+   if(removed.changes===1)
+     db.prepare("UPDATE model_selection SET mode='mock',selected_id=NULL WHERE singleton=1 AND mode='siwc'").run();
+   db.exec("COMMIT");
+ }catch(err){db.exec("ROLLBACK");throw err;}
  let revoked=false;
  try {
    const metadata=await fetch(SIWC_AUTH+"/.well-known/openid-configuration",{signal:AbortSignal.timeout(8000)}).then(r=>r.json()) as {revocation_endpoint?:string};
@@ -139,12 +156,5 @@ export async function disconnectSubscription(){
        client_id:current.value.client_id}),signal:AbortSignal.timeout(8000)});
    revoked=res.status===200;
  }catch{}
- const db=database();
- db.exec("BEGIN IMMEDIATE");
- try {
-   db.prepare("DELETE FROM chatgpt_subscription WHERE singleton=1").run();
-   db.prepare("UPDATE model_selection SET mode='mock',selected_id=NULL WHERE singleton=1 AND mode='siwc'").run();
-   db.exec("COMMIT");
- }catch(err){db.exec("ROLLBACK");throw err;}
  return {revoked};
 }

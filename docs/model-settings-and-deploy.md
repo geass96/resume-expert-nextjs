@@ -23,13 +23,13 @@
 
 ## 请求安全与限流
 
-- 登录、AI 请求和 OAuth 配对导入使用 CF-Connecting-IP 作为客户端限流标识，不再信任请求方可自行构造的 X-Forwarded-For。
+- 登录、AI 请求和 OAuth 配对导入默认使用单用户共享限流桶，不信任客户端提交的 IP 头。只有显式设置 RESUME_TRUST_CLOUDFLARE_IP=true 后，才以格式正确的 CF-Connecting-IP 区分客户端；不使用 X-Forwarded-For。
 - **可信代理前置条件：** 只有在网络/反向代理层能确保应用请求确实来自 Cloudflare 时，CF-Connecting-IP 才能作为可信的客户端身份。若源站可被直接访问，客户端可能自行伪造该头；单纯在应用代码中校验其格式并不能建立信任。
 - **不要对混合用途服务器全局限制 TCP 80/443 的来源 IP。** 本项目所在主机还承载直接连接的 VLESS REALITY 节点（例如 node.geis.de5.net:443）；将整台主机的 80/443 入站限制为 Cloudflare 网段可能直接中断节点服务。不得未经逐项验证就部署全局 iptables/nftables 白名单，也不得因此擅自修改 OCI Security List 或 NSG。
 - 如果必须阻止简历站点绕过 Cloudflare，应先只读确认监听进程、TLS/SNI 分流、OpenResty 虚拟主机和 REALITY 的实际流量路径，再设计**仅针对简历站点入口**的隔离策略。可评估独立监听/IP、经验证的虚拟主机级源地址策略或 Cloudflare Tunnel；具体方案须同时通过“Cloudflare 代理访问正常、源站简历站点直连被拒绝、REALITY 节点直连正常”三项验收后才可启用。若无法证明不会影响节点，则保持现状并记录源站绕过风险，不得上线通用防火墙规则。
 - 缺少或格式不正确的 Cloudflare IP 头会归入 unknown，不会回退到 X-Forwarded-For。本应用当前为单实例，内存限流在进程重启后会清零；多实例部署应使用共享限流存储或边缘规则。
 - JSON API 使用按 UTF-8 字节数限制的流式读取，即使 Content-Length 缺失也会执行实际读取上限。上限由具体 API 的输入规模决定。
-- 对公开的 /api/chatgpt-subscription/pair/complete，应用按客户端 IP 限流；还应在 Cloudflare 为该路径配置边缘速率规则，防止分布式流量消耗服务端验证资源。
+- 对公开的 /api/chatgpt-subscription/pair/complete，应用也执行上述默认共享限流；完成可信代理配置后才可启用按 IP 区分。还应在 Cloudflare 为该路径配置边缘速率规则，防止分布式流量消耗服务端验证资源。
 
 ## GitHub 自动部署前置配置
 

@@ -24,8 +24,9 @@ export async function POST(request: Request) {
         const { result, mode } = await analyzeResumeServer(input, optimizeStyle);
         return { result, mode };
       } catch(error) {
-        const message=error instanceof Error?error.message:"分析失败，请稍后重试";
-        console.error("[analyze]",error);
+        const message=error instanceof LLMError || error instanceof Error && error.message.startsWith("模型返回结构无效：")
+          ?error.message:"分析失败，请稍后重试";
+        console.error("[analyze] inference_failed",{status:error instanceof LLMError?error.status:undefined});
         return {error:message};
       }
     });
@@ -33,10 +34,8 @@ export async function POST(request: Request) {
     const message =
       error instanceof LLMError
         ? error.message
-        : error instanceof Error
-          ? error.message
-          : "分析失败，请稍后重试";
-    console.error("[analyze]", error);
+        : "分析失败，请稍后重试";
+    console.error("[analyze] request_failed",{status:error instanceof LLMError?error.status:undefined});
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -11,7 +11,10 @@ import {
   normalizeOptimizedItems,
 } from "@/lib/ai/prompts";
 import type { AnalysisResult, OptimizeStyle, UserInput } from "@/types/resume";
-import { validateAnalysisResult, validateGeneratedBullet, validateOptimizedItems } from "@/lib/ai/response-validation";
+import {
+  validateAnalysisResult,validateJDAnalysisResult,validateDiagnosisMatchResult,
+  validateResumeOutputResult,validateInterviewPrepResult,validateGeneratedBullet,validateOptimizedItems,
+} from "@/lib/ai/response-validation";
 
 type JDAnalysisResult = Pick<AnalysisResult, "jdAnalysis">;
 type DiagnosisMatchResult = Pick<
@@ -44,6 +47,7 @@ export async function runLLMResumeAnalysis(
     purpose: "jd_analysis",
     maxTokens: 3000,
   });
+  validateJDAnalysisResult(jd);
 
   const diagnosisMatch = await chatCompletionJSON<DiagnosisMatchResult>({
     system: RESUME_AGENT_SYSTEM_PROMPT,
@@ -51,6 +55,7 @@ export async function runLLMResumeAnalysis(
     purpose: "resume_diagnosis",
     maxTokens: 4000,
   });
+  validateDiagnosisMatchResult(diagnosisMatch);
 
   const coreSummary = buildCoreSummary(diagnosisMatch);
 
@@ -68,6 +73,8 @@ export async function runLLMResumeAnalysis(
       maxTokens: 3500,
     }),
   ]);
+  validateResumeOutputResult(optimizeResume);
+  validateInterviewPrepResult(interview);
 
   const raw: AnalysisResult = {
     jdAnalysis: jd.jdAnalysis,
