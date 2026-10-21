@@ -30,6 +30,7 @@ export function InputStep() {
     setAnalysisError,
     setCurrentStep,
     parentVersionId,
+    draftResume,
     optimizeStyle,
   } = useResumeStore();
 
@@ -43,7 +44,7 @@ export function InputStep() {
       const result = await runResumeAnalysis(userInput,optimizeStyle);
       const current=useResumeStore.getState();
       if(current.parentVersionId!==parentVersionId || JSON.stringify(current.userInput)!==JSON.stringify(userInput)) return;
-      setAnalysisResult(result,!!parentVersionId);
+      setAnalysisResult(result);
       setCurrentStep("jd-analysis");
     } catch (error) {
       setAnalysisError(error instanceof Error ? error.message : "分析失败，请稍后重试");
@@ -78,7 +79,7 @@ export function InputStep() {
           ) : (
             <>
               <Sparkles className="h-3.5 w-3.5" />
-              {parentVersionId ? "重新分析（保留草稿）" : "开始分析"}
+              {draftResume ? "重新分析（保留草稿）" : "开始分析"}
             </>
           )}
         </Button>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { protectedRequest,checkPayload,limitAttempt } from "@/lib/auth";
+import { protectedRequest, limitAttempt, readLimitedJson } from "@/lib/auth";
 import { credentialsForModel,deleteModelSettings,listModelSettings,saveModelSettings,setActiveModel } from "@/lib/model-settings";
 import { safelyRecordAIUsage } from "@/lib/ai-usage";
 
@@ -10,19 +10,23 @@ export async function GET(request:Request){
 }
 export async function POST(request:Request){
   const denied=await protectedRequest(request,true);if(denied)return denied;
-  const tooLarge=checkPayload(request,6000);if(tooLarge)return tooLarge;
   if(!limitAttempt("model-config",25))return NextResponse.json({error:"操作过于频繁"},{status:429});
+  const parsed = await readLimitedJson<Record<string, unknown>>(request, 6000, "请求过大", "请求格式错误");
+  if (!parsed.ok) return parsed.response;
   try{
-    const body=await request.text();
-    if(body.length>6000)return NextResponse.json({error:"请求过大"},{status:413});
-    const action=JSON.parse(body);
+    const action=parsed.data;
     if(!action||typeof action!=="object")throw Error("参数无效");
     if(action.action==="save"){
       if(typeof action.provider!=="string"||typeof action.model!=="string"||
          (action.id!==undefined&&typeof action.id!=="string")||
          (action.apiKey!==undefined&&typeof action.apiKey!=="string"))
         throw Error("参数格式无效");
-      const id=saveModelSettings(action);
+      const id=saveModelSettings({
+        provider: action.provider,
+        model: action.model,
+        ...(typeof action.id === "string" ? { id: action.id } : {}),
+        ...(typeof action.apiKey === "string" ? { apiKey: action.apiKey } : {}),
+      });
       return NextResponse.json({ok:true,id});
     }
     if(action.action==="activate"){
@@ -82,10 +86,10 @@ export async function POST(request:Request){
 }
 export async function DELETE(request:Request){
   const denied=await protectedRequest(request,true);if(denied)return denied;
+  const parsed = await readLimitedJson<{id?: unknown}>(request, 1000, "请求过长", "请求格式错误");
+  if (!parsed.ok) return parsed.response;
   try{
-    const raw=await request.text();
-    if(raw.length>1000)return NextResponse.json({error:"请求过长"},{status:413});
-    const {id}=JSON.parse(raw);
+    const {id}=parsed.data;
     if(typeof id!=="string"||id.length>100)throw Error("ID 无效");
     return deleteModelSettings(id)?NextResponse.json({ok:true}):NextResponse.json({error:"配置不存在"},{status:404});
   }catch{return NextResponse.json({error:"删除失败"},{status:400});}

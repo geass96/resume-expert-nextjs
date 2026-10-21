@@ -163,6 +163,9 @@ export type ProposalDecisions = Record<string, {
   fieldPath: string;
   text: string;
   at: string;
+  beforeText?: string;
+  applied?: boolean;
+  beforeProposalId?: string;
 }>;
 
 export interface RestoreContext {

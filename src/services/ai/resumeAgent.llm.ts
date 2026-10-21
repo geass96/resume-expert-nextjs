@@ -11,6 +11,10 @@ import {
   normalizeOptimizedItems,
 } from "@/lib/ai/prompts";
 import type { AnalysisResult, OptimizeStyle, UserInput } from "@/types/resume";
+import {
+  validateAnalysisResult,validateJDAnalysisResult,validateDiagnosisMatchResult,
+  validateResumeOutputResult,validateInterviewPrepResult,validateGeneratedBullet,validateOptimizedItems,
+} from "@/lib/ai/response-validation";
 
 type JDAnalysisResult = Pick<AnalysisResult, "jdAnalysis">;
 type DiagnosisMatchResult = Pick<
@@ -43,6 +47,7 @@ export async function runLLMResumeAnalysis(
     purpose: "jd_analysis",
     maxTokens: 3000,
   });
+  validateJDAnalysisResult(jd);
 
   const diagnosisMatch = await chatCompletionJSON<DiagnosisMatchResult>({
     system: RESUME_AGENT_SYSTEM_PROMPT,
@@ -50,6 +55,7 @@ export async function runLLMResumeAnalysis(
     purpose: "resume_diagnosis",
     maxTokens: 4000,
   });
+  validateDiagnosisMatchResult(diagnosisMatch);
 
   const coreSummary = buildCoreSummary(diagnosisMatch);
 
@@ -64,9 +70,11 @@ export async function runLLMResumeAnalysis(
       system: RESUME_AGENT_SYSTEM_PROMPT,
       user: buildAnalyzeInterviewPrompt(input, coreSummary),
     purpose: "interview_preparation",
-      maxTokens: 3500,
+      maxTokens: 5000,
     }),
   ]);
+  validateResumeOutputResult(optimizeResume);
+  validateInterviewPrepResult(interview);
 
   const raw: AnalysisResult = {
     jdAnalysis: jd.jdAnalysis,
@@ -78,6 +86,7 @@ export async function runLLMResumeAnalysis(
     interviewPrep: interview.interviewPrep,
   };
 
+  validateAnalysisResult(raw);
   return normalizeAnalysisResult(raw, input);
 }
 
@@ -93,6 +102,7 @@ export async function runLLMRegenerateOptimizedItems(
     maxTokens: 4000,
   });
 
+  validateOptimizedItems(raw.optimizedItems);
   return normalizeOptimizedItems(raw.optimizedItems);
 }
 
@@ -110,5 +120,5 @@ export async function runLLMFollowUpBullet(
     maxTokens: 500,
   });
 
-  return raw.bullet?.trim() ?? "";
+  return validateGeneratedBullet(raw);
 }

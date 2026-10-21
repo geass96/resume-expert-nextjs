@@ -46,7 +46,7 @@ export async function chatCompletionJSON<T>(options: ChatCompletionOptions): Pro
       ?"http_"+error.status
       :error instanceof LLMError?"model_response_error":"request_failed";
     if(error instanceof LLMError)throw error;
-    throw new LLMError(error instanceof Error?error.message:"大模型请求异常");
+    throw new LLMError("大模型请求异常，请稍后重试");
   }finally{
     safelyRecordAIUsage({
       purpose:options.purpose||"other",
@@ -123,7 +123,7 @@ async function callChatCompletions(
     throw new LLMError("大模型请求失败，状态码 " + response.status, response.status);
   }
 
-  const result=(await response.json()) as {
+  const result=(await response.json().catch(()=>{throw new LLMError("大模型返回的响应格式无效");})) as {
     usage?:{prompt_tokens?:number;completion_tokens?:number;input_tokens?:number;output_tokens?:number};
     choices?: Array<{
       finish_reason?: string;

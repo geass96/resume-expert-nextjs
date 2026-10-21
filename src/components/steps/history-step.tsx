@@ -20,7 +20,7 @@ export function HistoryStep() {
  const {draftResume,userInput,analysisResult,optimizeStyle,proposalDecisions,parentVersionId,currentJobId,currentProfileId,markSaved,restoreVersion}=useResumeStore();
  const [rows,setRows]=useState<Summary[]>([]);
  const [profileTitle,setProfileTitle]=useState("我的主简历");
- const [company,setCompany]=useState("");
+ const [company,setCompany]=useState<string|null>(null);
  const [role,setRole]=useState(userInput.targetRole);
  const [label,setLabel]=useState("");
  const [note,setNote]=useState("");
@@ -31,6 +31,8 @@ export function HistoryStep() {
  const [working,setWorking]=useState(false);
  const [message,setMessage]=useState("");
  const [restoreId,setRestoreId]=useState("");
+ const currentJob=rows.find(row=>row.jobId===currentJobId);
+ const targetCompany=company??currentJob?.company??"";
  const refresh=useCallback(async()=>{
   const response=await fetch("/api/history",{cache:"no-store"});
   if(!response.ok)throw Error("读取历史失败");
@@ -44,13 +46,13 @@ export function HistoryStep() {
   try{
    const response=await fetch("/api/history",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({profileId:currentProfileId||undefined,jobId:currentJobId||undefined,
-      parentVersionId:parentVersionId||undefined,profileTitle,company,role:role||userInput.targetRole,
+      parentVersionId:parentVersionId||undefined,profileTitle,company:company??currentJob?.company,role:role||userInput.targetRole,
       jdText:userInput.jobDescription,label,note,snapshot:draftResume,decisions:proposalDecisions,
       workflow:{userInput,analysisResult,optimizeStyle}})});
    const result=await response.json();
    if(!response.ok)throw Error(result.error||"保存失败");
    markSaved(result.id,result.profileId,result.jobId);
-   setMessage("已保存不可变版本 V"+result.versionNo+"，之后的修改不会覆盖它");
+   setMessage((result.forkedJob?"目标信息已变化，已另存为新岗位。":"")+"已保存不可变版本 V"+result.versionNo+"，之后的修改不会覆盖它");
    await refresh();
   }catch(e){setError((e as Error).message);}finally{setWorking(false);}
  }
@@ -99,12 +101,13 @@ export function HistoryStep() {
     {!draftResume&&<p className="text-sm text-amber-700">请先分析材料，或从下方恢复历史版本。</p>}
     <div className="grid grid-cols-2 gap-3">
      <div><Label htmlFor="profile">主简历名称</Label><Input id="profile" value={profileTitle} onChange={e=>setProfileTitle(e.target.value)} /></div>
-     <div><Label htmlFor="company">目标公司</Label><Input id="company" value={company} onChange={e=>setCompany(e.target.value)} placeholder="可留空" /></div>
+     <div><Label htmlFor="company">目标公司</Label><Input id="company" value={targetCompany} onChange={e=>setCompany(e.target.value)} placeholder={currentJobId&&!currentJob?"未修改时沿用原岗位公司":"可留空"} /></div>
      <div><Label htmlFor="role">目标岗位</Label><Input id="role" value={role||userInput.targetRole} onChange={e=>setRole(e.target.value)}/></div>
      <div><Label htmlFor="label">版本标记</Label><Input id="label" value={label} onChange={e=>setLabel(e.target.value)} placeholder="例：AI 产品经理投递版"/></div>
     </div>
     <Label htmlFor="memo">版本备注</Label>
     <Input id="memo" value={note} onChange={e=>setNote(e.target.value)} placeholder="本轮修改说明"/>
+    <p className="text-xs text-neutral-500">公司、岗位或 JD 改变后将另存为新岗位 V1，旧岗位与面试材料保持原样。</p>
     <Button disabled={!draftResume||!(role||userInput.targetRole).trim()||working} onClick={()=>void save()}>{working?"处理中":"确认定稿并保存版本"}</Button>
     {parentVersionId&&<p className="text-xs text-neutral-500">当前草稿继承历史版本：{parentVersionId.slice(0,8)}</p>}
    </CardContent></Card>

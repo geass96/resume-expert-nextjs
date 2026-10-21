@@ -1,4 +1,4 @@
-import { protectedRequest,checkPayload,limitAttempt } from "@/lib/auth";
+import { protectedRequest, limitAttempt, rateLimitClientKey, readLimitedJson } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { LLMError } from "@/lib/ai/client";
 import type { AnalyzeRequestBody } from "@/lib/ai/types";
@@ -7,11 +7,12 @@ import { streamJSON } from "@/lib/ai/stream-json";
 
 export async function POST(request: Request) {
   const forbidden=await protectedRequest(request,true);if(forbidden)return forbidden;
-  const oversized=checkPayload(request,120000);if(oversized)return oversized;
-  if(!limitAttempt("llm:"+(request.headers.get("x-forwarded-for")||"owner"),10))
+  if (!limitAttempt("llm:" + rateLimitClientKey(request), 10))
     return NextResponse.json({error:"每分钟 AI 请求次数已达到上限"},{status:429});
   try {
-    const body = (await request.json()) as AnalyzeRequestBody;
+    const parsed = await readLimitedJson<AnalyzeRequestBody>(request, 120000, "输入内容过长", "请求格式错误");
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
     const { input, optimizeStyle = "ai-product" } = body;
 
     if (!input?.targetRole?.trim() || !input?.jobDescription?.trim() || !input?.originalResume?.trim()) {
@@ -23,8 +24,9 @@ export async function POST(request: Request) {
         const { result, mode } = await analyzeResumeServer(input, optimizeStyle);
         return { result, mode };
       } catch(error) {
-        const message=error instanceof Error?error.message:"分析失败，请稍后重试";
-        console.error("[analyze]",error);
+        const message=error instanceof LLMError || error instanceof Error && error.message.startsWith("模型返回结构无效：")
+          ?error.message:"分析失败，请稍后重试";
+        console.error("[analyze] inference_failed",{status:error instanceof LLMError?error.status:undefined});
         return {error:message};
       }
     });
@@ -32,10 +34,8 @@ export async function POST(request: Request) {
     const message =
       error instanceof LLMError
         ? error.message
-        : error instanceof Error
-          ? error.message
-          : "分析失败，请稍后重试";
-    console.error("[analyze]", error);
+        : "分析失败，请稍后重试";
+    console.error("[analyze] request_failed",{status:error instanceof LLMError?error.status:undefined});
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

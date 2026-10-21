@@ -18,7 +18,7 @@ const origin="http://127.0.0.1:"+port;
 const env={...process.env,NODE_ENV:"production",HOSTNAME:"127.0.0.1",PORT:String(port),
  RESUME_PUBLIC_ORIGIN:origin,RESUME_DATA_DIR:temp,
  RESUME_PASSWORD_SALT:salt,RESUME_PASSWORD_HASH:scryptSync(password,salt,32).toString("hex"),
- RESUME_SESSION_SECRET:randomBytes(40).toString("hex"),USE_MOCK_AI:"true"};
+ RESUME_SESSION_SECRET:randomBytes(40).toString("hex"),USE_MOCK_AI:"true",RESUME_TRUST_CLOUDFLARE_IP:"false"};
 const appProcess=spawn(process.execPath,["server.js"],{cwd:app,env,stdio:["ignore","pipe","pipe"]});
 let output="";
 for(const stream of [appProcess.stdout,appProcess.stderr])stream.on("data",x=>output=(output+x).slice(-4000));
@@ -32,10 +32,32 @@ try{
  assert.equal((await fetch(origin+"/api/analyze",{method:"POST",headers:{Origin:origin}})).status,401,"Anonymous cannot consume LLM");
  const login=await fetch(origin+"/api/auth/login",{method:"POST",headers:{Origin:origin,"Content-Type":"application/json"},body:JSON.stringify({password})});
  assert.equal(login.status,200,"Login must succeed");
+ const loginProbeHeaders={Origin:origin,"Content-Type":"application/json","CF-Connecting-IP":"192.0.2.55"};
+ for(let i=0;i<4;i++){
+   const response=await fetch(origin+"/api/auth/login",{method:"POST",
+     headers:{...loginProbeHeaders,"CF-Connecting-IP":"192.0.2."+String(i+1),"X-Forwarded-For":"198.51.100."+String(i+1)},
+     body:JSON.stringify({password:"synthetic-wrong-password"})});
+   assert.equal(response.status,401,"Wrong passwords count toward the default owner bucket regardless of IP headers");
+ }
+ const blockedLogin=await fetch(origin+"/api/auth/login",{method:"POST",
+   headers:{...loginProbeHeaders,"X-Forwarded-For":"203.0.113.200"},
+   body:JSON.stringify({password:"synthetic-wrong-password"})});
+ assert.equal(blockedLogin.status,429,"Sixth attempt must be limited even with changing Cloudflare and forwarding headers");
  const cookie=login.headers.get("set-cookie").split(";")[0];
  const headers={Cookie:cookie,Origin:origin,"Content-Type":"application/json"};
+ const oversizedJson=JSON.stringify({input:{targetRole:"synthetic role",jobDescription:"x",originalResume:"x"},padding:"x".repeat(121000)});
+ const oversizedStream=new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode(oversizedJson));controller.close();}});
+ const oversizedResponse=await fetch(origin+"/api/analyze",{method:"POST",headers,body:oversizedStream,duplex:"half"});
+ assert.equal(oversizedResponse.status,413,"Streaming request body without Content-Length must still be capped");
+ const privateMarker="FAKE_PII_SYNTHETIC_ONLY";
+ const malformedResponse=await fetch(origin+"/api/analyze",{method:"POST",headers,body:privateMarker});
+ assert.equal(malformedResponse.status,400,"Malformed JSON must be rejected as a client error");
+ assert(!JSON.stringify(await malformedResponse.json()).includes(privateMarker),"Parser errors must not expose request snippets");
+ const nullResponse=await fetch(origin+"/api/analyze",{method:"POST",headers,body:"null"});
+ assert.equal(nullResponse.status,400,"JSON null must be rejected before reading request properties");
  assert.equal((await fetch(origin+"/",{headers})).status,200);
  assert.equal((await fetch(origin+"/api/history",{headers})).status,200);
+ assert(!output.includes(privateMarker),"Malformed private input must not be copied into application logs");
  const usage=await fetch(origin+"/api/ai/usage?days=30&page=1",{headers});
  assert.equal(usage.status,200,"Authenticated owner can read AI usage");
  const usageData=await usage.json();
@@ -73,6 +95,23 @@ try{
  const invalid=await post({...payload,workflow:{...workflow,analysisResult:{}}});
  assert.equal(invalid.status,400,"Malformed workflow rejected without saving a version");
  console.log("PASS isolated HTTP: legacy history compatible; full workflow, answers and inputs round-trip through save/restore API");
+ const changedJob=await post({...payload,profileId:a.profileId,jobId:a.jobId,parentVersionId:b.id,
+   company:"合成B公司",role:"合成B岗位",jdText:"合成B JD"});
+ assert.equal(changedJob.status,201);
+ const changedTarget=await changedJob.json();
+ assert.notEqual(changedTarget.jobId,a.jobId,"Changed JD must create a new target");
+ assert.equal(changedTarget.versionNo,1);
+ const changedVersion=await fetch(origin+"/api/history/"+changedTarget.id,{headers}).then(r=>r.json());
+ assert.equal(changedVersion.jobDescription,"合成B JD");
+ assert.equal(changedVersion.parentVersionId,null);
+ const changedPractice=await fetch(origin+"/api/interview/sessions",{method:"POST",headers,
+   body:JSON.stringify({versionId:changedTarget.id,kind:"project"})});
+ assert.equal(changedPractice.status,201);
+ const changedSession=(await changedPractice.json()).session;
+ assert.equal(changedSession.role,"合成B岗位");
+ assert.equal(changedSession.company,"合成B公司");
+ assert.equal((await fetch(origin+"/api/interview/sessions/"+changedSession.id,{method:"DELETE",headers})).status,200);
+ console.log("PASS isolated HTTP: changed job forks V1, preserves old versions and supplies the new interview context");
  const introduction=await fetch(origin+"/api/introduction",{method:"POST",headers,body:JSON.stringify({versionId:b.id,duration:1})});
  assert.equal(introduction.status,200);const introData=await introduction.json();assert.equal(introData.mode,"mock");
  assert.equal((await fetch(origin+"/api/interview/sessions")).status,401);
@@ -122,6 +161,8 @@ try{
  assert.equal(noCredentials.status,400,"Cannot activate subscription without consent");
  const noModels=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"models"})});
  assert.equal(noModels.status,409,"Cannot read subscription catalog without consent");
+ const noTest=await fetch(origin+"/api/chatgpt-subscription",{method:"POST",headers,body:JSON.stringify({action:"test"})});
+ assert.equal(noTest.status,409,"Cannot run a real subscription inference before owner consent and model activation");
  assert.equal((await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})).status,401,"Pair creation must be private");
  assert.equal((await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers:{...headers,Origin:"https://malicious.invalid"},body:"{}"})).status,403,"Pair creation must reject cross-origin requests");
  const createdPair=await fetch(origin+"/api/chatgpt-subscription/pair",{method:"POST",headers,body:"{}"});

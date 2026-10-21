@@ -22,13 +22,14 @@ test("restoring a legacy history version leaves all five workflow steps accessib
 
 test("legacy restore replaces unrelated inputs and preserves edits when analysis is rebuilt", () => {
   useResumeStore.getState().setUserInput({jobDescription:"其他岗位JD", additionalInfo:"其他人的补充信息"});
-  useResumeStore.getState().restoreVersion(snapshot,"legacy","profile","job","产品经理",{jobDescription:"历史岗位JD"});
+  useResumeStore.getState().restoreVersion(snapshot,"legacy","profile","job","产品经理",{
+    jobDescription:"历史岗位JD",decisions:{"opt-1":{decision:"rejected",fieldPath:"summary",text:"",at:"2026-01-01T00:00:00Z"}},
+  });
   assert.equal(useResumeStore.getState().userInput.jobDescription,"历史岗位JD");
   assert.equal(useResumeStore.getState().userInput.additionalInfo,"");
   assert.match(useResumeStore.getState().userInput.originalResume,/人工确认的摘要/);
   useResumeStore.getState().updateDraft("summary","恢复后人工编辑");
   useResumeStore.getState().setEvidenceNote("summary","已核实");
-  useResumeStore.getState().rejectProposal("opt-1");
   useResumeStore.getState().setAnalysisResult(analysis(),true);
   assert.equal(useResumeStore.getState().draftResume.summary,"恢复后人工编辑");
   assert.equal(useResumeStore.getState().parentVersionId,"legacy");
