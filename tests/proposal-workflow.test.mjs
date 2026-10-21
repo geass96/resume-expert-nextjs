@@ -144,3 +144,44 @@ test("skills and core-capability suggestions have explicit editable rejection ta
   useResumeStore.getState().updateDraft("skillsAndTools","SQL、Figma\n数据分析");
   assert.deepEqual(useResumeStore.getState().draftResume.skillsAndTools,["SQL","Figma","数据分析"]);
 });
+
+test("list suggestions undo normalized whitespace and newlines, including stacked and legacy records",()=>{
+  for(const path of ["coreSkills","skillsAndTools"]){
+    for(const after of ["SQL\nPython","SQL、 Python"]){
+      const result=analysis();result.finalResume[path]=["原始技能"];
+      result.optimizedItems=[{id:"list-1",section:"技能",before:"原始技能",after,reason:"",riskWarning:""},
+        {id:"list-2",section:"技能",before:after,after:"数据分析\n Figma",reason:"",riskWarning:""}];
+      const store=useResumeStore.getState();store.setAnalysisResult(result,false);
+      store.applyProposal("list-1",path,after);store.applyProposal("list-2",path,"数据分析\n Figma");
+      assert.equal(store.rejectProposal("list-1",path),false);
+      assert.equal(store.rejectProposal("list-2",path),true);
+      assert.deepEqual(useResumeStore.getState().draftResume[path],["SQL","Python"]);
+      assert.equal(store.rejectProposal("list-1",path),true);
+      assert.deepEqual(useResumeStore.getState().draftResume[path],["原始技能"]);
+      // Old persisted decisions may contain raw separators but a known baseline.
+      store.setAnalysisResult(result,false);store.applyProposal("list-1",path,after);
+      useResumeStore.setState({proposalDecisions:{...useResumeStore.getState().proposalDecisions,
+        "list-1":{...useResumeStore.getState().proposalDecisions["list-1"],text:after}}});
+      assert.equal(store.rejectProposal("list-1",path),true);
+      assert.deepEqual(useResumeStore.getState().draftResume[path],["原始技能"]);
+      result.finalResume[path]=["SQL","Python"];
+      store.setAnalysisResult(result,false);
+      assert.equal(store.rejectProposal("list-1",path),true);
+      assert.deepEqual(useResumeStore.getState().draftResume[path],["原始技能"]);
+    }
+  }
+});
+
+test("legacy accepted suggestions without an undo baseline remain a visible conflict after reaccepting",()=>{
+  const store=useResumeStore.getState();store.setAnalysisResult(analysis(),false);
+  useResumeStore.setState({proposalDecisions:{"opt-1":{decision:"accepted",fieldPath:"summary",text:"AI 建议摘要",at:"2020-01-01T00:00:00Z"}}});
+  assert.equal(store.rejectProposal("opt-1","summary"),false);
+  assert.equal(useResumeStore.getState().proposalDecisions["opt-1"].decision,"accepted");
+  assert.equal(useResumeStore.getState().draftResume.summary,"AI 建议摘要");
+  store.applyProposal("opt-1","summary","AI 建议摘要");
+  assert.equal(store.rejectProposal("opt-1","summary"),false);
+  assert.equal(useResumeStore.getState().draftResume.summary,"AI 建议摘要");
+  store.updateDraft("summary","本人重新确认的摘要");store.applyProposal("opt-1","summary","AI 建议摘要");
+  assert.equal(store.rejectProposal("opt-1","summary"),true);
+  assert.equal(useResumeStore.getState().draftResume.summary,"本人重新确认的摘要");
+});

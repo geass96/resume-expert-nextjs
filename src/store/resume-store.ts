@@ -180,7 +180,7 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     const decisions={...state.proposalDecisions};
     for(const [id,proposal] of Object.entries(decisions)) {
       if(proposal.fieldPath===path && proposal.decision==="accepted")
-        decisions[id]={...proposal,decision:"edited",text,at:new Date().toISOString()};
+        decisions[id]={...proposal,decision:"edited",text:readDraft(draft,path)??text,at:new Date().toISOString()};
     }
     return {draftResume:draft,proposalDecisions:decisions};
   }),
@@ -193,16 +193,16 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     const prior=state.proposalDecisions[id];
     const beforeProposalId=prior?.fieldPath===path && prior.decision==="accepted" && prior.applied!==false
       ?prior.beforeProposalId:Object.entries(state.proposalDecisions).find(([key,decision])=>
-        key!==id && decision.fieldPath===path && decision.decision==="accepted" && decision.applied===true && decision.text===previous)?.[0];
+        key!==id && decision.fieldPath===path && decision.decision==="accepted" && decision.applied===true && normalizeDraftText(path,decision.text)===previous)?.[0];
     const beforeText=prior?.fieldPath===path && prior.decision==="accepted" && prior.applied!==false
-      ? prior.beforeText ?? proposal?.before ?? previous
-      : proposal && previous===proposal.after ? proposal.before : previous;
+      ? prior.beforeText===undefined?undefined:normalizeDraftText(path,prior.beforeText)
+      : proposal && previous===normalizeDraftText(path,proposal.after) ? normalizeDraftText(path,proposal.before) : previous;
     const decisions={...state.proposalDecisions};
     for(const [key,decision] of Object.entries(decisions))
       if(key!==id && !key.startsWith("evidence:") && decision.fieldPath===path && decision.decision!=="rejected")
         decisions[key]={...decision,applied:false};
     return {draftResume:draft,proposalDecisions:{...decisions,[id]:{
-      decision:edited?"edited":"accepted",fieldPath:path,text,at:new Date().toISOString(),beforeText,applied:true,beforeProposalId,
+      decision:edited?"edited":"accepted",fieldPath:path,text:readDraft(draft,path)??text,at:new Date().toISOString(),beforeText,applied:true,beforeProposalId,
     }}};
   }),
   rejectProposal: (id,path)=>{
@@ -212,7 +212,10 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
     if(!state.draftResume || !proposal || !target)return false;
     const draft=structuredClone(state.draftResume),current=readDraft(draft,target);
     if(current===undefined)return false;
-    if(!prior && current!==proposal.after && current!==proposal.before)return false;
+    const proposedAfter=normalizeDraftText(target,proposal.after),proposedBefore=normalizeDraftText(target,proposal.before);
+    if(!prior && current!==proposedAfter && current!==proposedBefore)return false;
+    // Legacy accepted decisions did not record the actual pre-adoption draft.
+    if(prior?.decision==="accepted"&&prior.beforeText===undefined)return false;
     // Undo only the selected field while it still contains this suggestion.
     // A later manual edit or another proposal must never be overwritten.
     const applied=prior?.fieldPath===target && prior.decision==="accepted";
@@ -220,25 +223,25 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
       key!==id && !key.startsWith("evidence:") && decision.fieldPath===target &&
       decision.decision==="accepted" && (decision.applied===true||decision.applied===undefined && decision.at>(prior?.at??"")));
     if(anotherOwnsField)return false;
-    const beforeText=prior?.beforeText??proposal.before;
+    const beforeText=normalizeDraftText(target,prior?.beforeText??proposal.before);
     const decisions={...state.proposalDecisions};
     if(prior?.decision!=="edited" &&
-      (applied ? current===prior.text : current===proposal.after)){
+      (applied ? current===normalizeDraftText(target,prior.text) : current===proposedAfter)){
       // Old decisions can overlap; do not silently resurrect rejected content.
       const rejectedBaseline=Object.entries(state.proposalDecisions).some(([key,decision])=>
         key!==id && decision.fieldPath===target && decision.decision==="rejected" &&
-        (!decision.text||decision.text===beforeText));
+        (!decision.text||normalizeDraftText(target,decision.text)===beforeText));
       if(rejectedBaseline)return false;
       writeDraft(draft,target,beforeText);
       const predecessors=Object.entries(decisions).filter(([key,decision])=>
-        key!==id && decision.fieldPath===target && decision.decision==="accepted" && decision.text===beforeText);
+        key!==id && decision.fieldPath===target && decision.decision==="accepted" && normalizeDraftText(target,decision.text)===beforeText);
       const predecessor=prior?.beforeProposalId
         ?predecessors.find(([key])=>key===prior.beforeProposalId)
         :predecessors.length===1?predecessors[0]:undefined;
       if(predecessor)decisions[predecessor[0]]={...predecessor[1],applied:true};
     }
     set({draftResume:draft,proposalDecisions:{...decisions,[id]:{
-      decision:"rejected",fieldPath:target,text:prior?.text||proposal.after,at:new Date().toISOString(),
+      decision:"rejected",fieldPath:target,text:normalizeDraftText(target,prior?.text||proposal.after),at:new Date().toISOString(),
       beforeText,applied:false,beforeProposalId:prior?.beforeProposalId,
     }}});
     return true;
@@ -337,10 +340,16 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
 
 
 // Field paths are generated from explicit visible fields, never inferred from LLM strings.
+function skillItems(text:string):string[] {
+ return text.split(/[、\n]/).map(item=>item.trim()).filter(Boolean);
+}
+function normalizeDraftText(path:string,text:string):string {
+ return path==="coreSkills"||path==="skillsAndTools"?skillItems(text).join("、"):text;
+}
 function readDraft(draft:FinalResume,path:string):string|undefined {
  if(path==="summary")return draft.summary;
  if(path==="jobIntent")return draft.jobIntent;
- if(path==="coreSkills"||path==="skillsAndTools")return draft[path].join("、");
+ if(path==="coreSkills"||path==="skillsAndTools")return normalizeDraftText(path,draft[path].join("、"));
  const match=/^(work|project):(\d+):(\d+)$/.exec(path);
  if(!match)return undefined;
  const list=match[1]==="work"?draft.workExperience:draft.projectExperience;
@@ -350,7 +359,7 @@ function writeDraft(draft:FinalResume,path:string,text:string):boolean {
  if(path==="summary"){draft.summary=text;return true;}
  if(path==="jobIntent"){draft.jobIntent=text;return true;}
  if(path==="coreSkills"||path==="skillsAndTools"){
-   draft[path]=text.split(/[、\n]/).map(item=>item.trim()).filter(Boolean);return true;
+   draft[path]=skillItems(text);return true;
  }
  const match=/^(work|project):(\d+):(\d+)$/.exec(path);
  if(!match)return false;
