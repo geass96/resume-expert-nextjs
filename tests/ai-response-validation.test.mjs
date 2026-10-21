@@ -88,6 +88,10 @@ test("validates interview feedback and self-introduction outputs", () => {
     summary: "回答清晰，仍需补充可核实证据。", nextQuestion: "你如何验证这个结果？",
   };
   assert.doesNotThrow(() => validateInterviewResponse(feedback, true));
+  assert.throws(() => validateInterviewResponse({ ...feedback, dimensions: {
+    真实性可核实程度: 4, 岗位相关性: 4, STAR结构: 3, 清晰度: 4, 证据口径: 2,
+  } }, true), /interview.dimensions.authenticity/);
+  assert.throws(() => validateInterviewResponse({ ...feedback, dimensions: { ...feedback.dimensions, authenticity: "4" } }, true), /0-5/);
   assert.throws(() => validateInterviewResponse({ ...feedback, dimensions: { ...feedback.dimensions, evidence: 8 } }, true), /0-5/);
   assert.throws(() => validateInterviewResponse({ ...feedback, nextQuestion: "" }, true), /缺少下一轮/);
   assert.equal(validateSelfIntroduction("  我是一名产品经理。 "), "我是一名产品经理。");

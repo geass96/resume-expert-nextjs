@@ -32,6 +32,15 @@ test("SIWC quota errors are actionable without exposing supplier messages or pri
    });
  }
 });
+test("SIWC token-truncated output is rejected with a safe length explanation",()=>{
+ const partial="data: "+JSON.stringify({type:"response.output_text.delta",delta:'{"ok":true}'})+"\n\n";
+ const incomplete="data: "+JSON.stringify({type:"response.incomplete",response:{incomplete_details:{reason:"max_output_tokens"},error:{message:"SYNTHETIC_PRIVATE_SNIPPET"}}})+"\n\n";
+ assert.throws(()=>readSubscriptionEvents([partial,incomplete]),error=>{
+   assert.match(error.message,/输出长度上限/);
+   assert(!error.message.includes("SYNTHETIC_PRIVATE_SNIPPET"));
+   return true;
+ });
+});
 test("SIWC encrypted storage, stable host ID, refresh locking and disconnect",async()=>{
  const dir=mkdtempSync(join(tmpdir(),"siwc-qa-"));
  process.env.RESUME_DATA_DIR=dir;

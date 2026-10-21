@@ -70,7 +70,7 @@ export async function runLLMResumeAnalysis(
       system: RESUME_AGENT_SYSTEM_PROMPT,
       user: buildAnalyzeInterviewPrompt(input, coreSummary),
     purpose: "interview_preparation",
-      maxTokens: 3500,
+      maxTokens: 5000,
     }),
   ]);
   validateResumeOutputResult(optimizeResume);

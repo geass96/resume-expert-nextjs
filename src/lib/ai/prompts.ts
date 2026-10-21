@@ -253,7 +253,8 @@ ${coreSummary ? `【前序分析摘要】\n${coreSummary}\n` : ""}
   }
 }
 
-要求：likelyQuestions 恰好 10 条。`;
+要求：likelyQuestions 恰好 10 条。每题 question 简洁，suggestedAnswer 给出 50-80 字的回答提纲，evidenceNeeded 至多 2 条简短证据。
+其他清单每类至多 5 条，selfIntroduction 不超过 250 字。保持 JSON 完整，避免重复展开同一经历，不为凑篇幅编造事实。`;
 }
 
 export function buildOptimizeUserPrompt(input: UserInput, style: OptimizeStyle): string {
