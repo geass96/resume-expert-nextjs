@@ -15,8 +15,17 @@ import { InterviewSimStep } from "@/components/steps/interview-sim-step";
 import { ModelSettingsStep } from "@/components/steps/model-settings-step";
 import { AIUsageStep } from "@/components/steps/ai-usage-step";
 import { RestoreAnalysisStep } from "@/components/steps/restore-analysis-step";
+import { KnowledgeCardsStep } from "@/components/steps/knowledge-cards-step";
 
 export function StepContent() {
+  const currentStep = useResumeStore((s) => s.currentStep);
+  return <>
+    <KnowledgeCardsStep active={currentStep === "knowledge-cards"} />
+    {currentStep !== "knowledge-cards" && <WorkflowStepContent />}
+  </>;
+}
+
+function WorkflowStepContent() {
   const currentStep = useResumeStore((s) => s.currentStep);
   const needsAnalysis = useResumeStore((s) => !!s.draftResume && !s.analysisResult);
 

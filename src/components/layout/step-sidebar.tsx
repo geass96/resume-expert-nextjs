@@ -2,6 +2,7 @@
 
 import {
   Brain,
+  Layers,
   BarChart3,
   Check,
   Circle,
@@ -43,6 +44,7 @@ const GROUPS: StepGroup[] = [
     items: [
       { id: "history", label: "历史版本", icon: ClipboardList },
       { id: "sim-interview", label: "模拟面试", icon: Brain },
+      { id: "knowledge-cards", label: "知识卡片", icon: Layers },
     ],
   },
   {

@@ -12,6 +12,7 @@ export type StepId =
   | "export"
   | "history"
   | "sim-interview"
+  | "knowledge-cards"
   | "model-settings"
   | "ai-usage";
 

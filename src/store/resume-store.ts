@@ -325,7 +325,7 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
       return analysisResult ? "completed" : "pending";
     }
 
-    if(step==="history"||step==="sim-interview"||step==="model-settings"||step==="ai-usage") return currentStep===step?"active":"pending";
+    if(step==="history"||step==="sim-interview"||step==="knowledge-cards"||step==="model-settings"||step==="ai-usage") return currentStep===step?"active":"pending";
     if(!analysisResult && STEPS.includes(step) && get().draftResume)
       return currentStep===step?"active":"pending";
     if (!analysisResult) return "disabled";
