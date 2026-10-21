@@ -176,6 +176,28 @@ try{
  assert.equal(badCompletion.status,400,"Invalid OAuth material rejected");
  const afterPair=await fetch(origin+"/api/chatgpt-subscription",{headers}).then(x=>x.json());
  assert.equal(afterPair.connected,false,"Invalid OAuth import must not connect subscription");
+ const qoderOperation={action:"models",id:"synthetic-missing-id"};
+ assert.equal((await fetch(origin+"/api/model-settings",{method:"POST",headers:{Origin:origin,"Content-Type":"application/json"},body:JSON.stringify(qoderOperation)})).status,401,"Qoder catalog is owner-only");
+ assert.equal((await fetch(origin+"/api/model-settings",{method:"POST",headers:{...headers,Origin:"https://evil.invalid"},body:JSON.stringify(qoderOperation)})).status,403,"Qoder catalog requires same origin");
+ const fakePat="synthetic-qoder-integration-pat-not-real";
+ const beforeQoder=await fetch(origin+"/api/model-settings",{headers}).then(r=>r.json());
+ const savedQoder=await fetch(origin+"/api/model-settings",{method:"POST",headers,
+   body:JSON.stringify({action:"save",provider:"qoder",model:"auto",apiKey:fakePat})});
+ assert.equal(savedQoder.status,200,"Qoder PAT can be saved without inference");
+ const qoderId=(await savedQoder.json()).id;
+ const settings=await fetch(origin+"/api/model-settings",{headers}).then(r=>r.json());
+ assert.equal(settings.mode,beforeQoder.mode,"Saving Qoder preserves the current selection");
+ assert(settings.providers.qoder,"Qoder appears in the provider selector");
+ assert.equal(JSON.stringify(settings).includes(fakePat),false,"Qoder PAT never reaches public settings");
+ assert.equal((await fetch(origin+"/api/model-settings",{method:"POST",headers,
+   body:JSON.stringify({action:"activate",id:qoderId})})).status,200);
+ const qoderStatus=await fetch(origin+"/api/ai/status",{headers}).then(r=>r.json());
+ assert.equal(qoderStatus.provider,"qoder","Activated Qoder is routed through AI config");
+ assert.equal(qoderStatus.model,"auto");
+ assert.equal((await fetch(origin+"/api/model-settings",{method:"DELETE",headers,body:JSON.stringify({id:qoderId})})).status,200);
+ assert.equal((await fetch(origin+"/api/ai/status",{headers}).then(r=>r.json())).mode,"mock","Deleting active Qoder returns to Mock");
+ assert(!output.includes(fakePat),"Qoder PAT is absent from app logs");
+ console.log("PASS isolated HTTP: Qoder PAT save/select/delete, private catalog, CSRF, no credential echoes or paid calls");
  console.log("PASS isolated HTTP: browser OAuth pairing, CSRF, rejection of fabricated credentials");
  console.log("PASS isolated HTTP: SIWC OAuth status, stable host, login and CSRF protections, no unauthorized activation");
  console.log("PASS isolated HTTP: mock interview, JD-backed session, pause/resume, 6 rounds, duplicate protection, replay, private API");

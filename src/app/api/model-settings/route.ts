@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { protectedRequest, limitAttempt, readLimitedJson } from "@/lib/auth";
 import { credentialsForModel,deleteModelSettings,listModelSettings,saveModelSettings,setActiveModel } from "@/lib/model-settings";
 import { safelyRecordAIUsage } from "@/lib/ai-usage";
+import { listQoderModels, qoderCompletionJSON } from "@/lib/ai/qoder";
 
 export const runtime="nodejs";
 export async function GET(request:Request){
@@ -38,12 +39,27 @@ export async function POST(request:Request){
       setActiveModel(null);
       return NextResponse.json({ok:true});
     }
+    if(action.action==="models"){
+      if(typeof action.id!=="string"||action.id.length>100)throw Error("无效配置 ID");
+      const config=credentialsForModel(action.id);
+      if(config.provider!=="qoder")throw Error("此模型供应商不支持目录读取");
+      return NextResponse.json({ok:true,models:await listQoderModels(config)},{headers:{"Cache-Control":"no-store"}});
+    }
     if(action.action==="test"){
       if(typeof action.id!=="string"||action.id.length>100)throw Error("无效配置 ID");
       const config=credentialsForModel(action.id);
       const started=Date.now();
       let ok=false,inputTokens:number|null=null,outputTokens:number|null=null,errorCode:string|null="request_failed";
       try{
+        if(config.provider==="qoder"){
+          const result=await qoderCompletionJSON<{ok?:unknown}>(config,{
+            system:'You are a connectivity probe. Return exactly {"ok":true}.',user:'Return {"ok":true}.',maxTokens:40,
+            onAttempt:()=>{},onUsage:(input,output)=>{inputTokens=input;outputTokens=output;},
+          });
+          if(result?.ok!==true)throw Error("Qoder 模型连接测试返回格式无效");
+          ok=true;errorCode=null;
+          return NextResponse.json({ok:true,message:"Qoder 真实模型连接测试成功"});
+        }
         // Connectivity checks use only fixed provider URLs and never store credentials.
         const response=await fetch(config.baseUrl+"/chat/completions",{
           method:"POST",signal:AbortSignal.timeout(18000),

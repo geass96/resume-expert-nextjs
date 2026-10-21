@@ -54,6 +54,10 @@ LLM_MODEL=gpt-4o-mini
 | DeepSeek | https://api.deepseek.com/v1 | deepseek-chat |
 | Moonshot | https://api.moonshot.cn/v1 | moonshot-v1-8k |
 
+### Qoder 个人 PAT
+
+在「模型配置」选择「Qoder（个人 PAT）」，填写 PAT 并保存；点击「读取 Qoder 可用模型」，自行选择账号支持的模型后再次保存。也可直接填写官方模型 ID；`auto` 表示 Qoder 自动选模。最后点击「测试」和「启用」。创建 PAT、部署要求和验收边界见 [Qoder 接入说明](docs/QODER.md)。
+
 ## 项目结构
 
 ```

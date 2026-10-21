@@ -6,6 +6,7 @@ export const MODEL_PROVIDER_PRESETS = {
   deepseek:{label:"DeepSeek API",baseUrl:"https://api.deepseek.com",suggested:"deepseek-flash"},
   openrouter:{label:"OpenRouter 模型聚合",baseUrl:"https://openrouter.ai/api/v1",suggested:"openai/gpt-4o-mini"},
   groq:{label:"Groq API",baseUrl:"https://api.groq.com/openai/v1",suggested:"llama-3.3-70b-versatile"},
+  qoder:{label:"Qoder（个人 PAT）",baseUrl:"",suggested:"auto"},
 } as const;
 export type ModelProviderId=keyof typeof MODEL_PROVIDER_PRESETS;
 type StoredModel={id:string;provider:string;model:string;encrypted_key:string;created_at:string;updated_at:string};
@@ -45,11 +46,12 @@ export function listModelSettings(){
 }
 export function saveModelSettings(input:{id?:string;provider:string;model:string;apiKey?:string}){
   const d=db();
-  if(!(input.provider in MODEL_PROVIDER_PRESETS))throw Error("目前仅支持白名单 OpenAI 兼容服务");
+  if(!Object.hasOwn(MODEL_PROVIDER_PRESETS,input.provider))throw Error("不支持该模型供应商");
   const model=input.model?.trim();
   if(!model||model.length>120||!/^[\w.\-:/]+$/.test(model))throw Error("模型 ID 无效");
   const previous=input.id?d.prepare("SELECT * FROM model_profiles WHERE id=?").get(input.id) as StoredModel|undefined:undefined;
   if(input.id&&!previous)throw Error("该模型配置不存在");
+  if(previous&&previous.provider!==input.provider&&!input.apiKey?.trim())throw Error("更换供应商必须重新填写模型凭据");
   const key=input.apiKey?.trim();
   if(key&&(key.length>2000||key.length<8))throw Error("API Key 长度无效");
   if(!previous&&!key)throw Error("首次保存必须填写 API Key");
