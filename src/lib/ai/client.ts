@@ -3,6 +3,7 @@ import { safelyRecordAIUsage, type AIPurpose } from "@/lib/ai-usage";
 import { subscriptionCompletionJSON } from "@/lib/ai/chatgpt-siwc";
 import { LLMError } from "@/lib/ai/errors";
 import { parseJSONFromMessage } from "@/lib/ai/parse-json";
+import { qoderCompletionJSON } from "@/lib/ai/qoder";
 
 export { LLMError } from "@/lib/ai/errors";
 
@@ -69,6 +70,7 @@ async function requestChatCompletionJSON<T>(
   if(config.provider==="chatgpt-siwc"){
     return subscriptionCompletionJSON<T>({...options,...observer});
   }
+  if(config.provider==="qoder")return qoderCompletionJSON<T>(config,{...options,...observer});
   if(!config.apiKey)throw new LLMError("未配置 LLM_API_KEY");
 
   const data=await callChatCompletions(config,options,observer);
