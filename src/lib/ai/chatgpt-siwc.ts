@@ -30,8 +30,15 @@ export function parseSubscriptionEvents(chunks:string[]):{
        text+=event.delta;
        if(text.length>140000)throw new LLMError("订阅输出过长");
      }
-     if(event.type==="response.failed"||event.type==="response.incomplete"||event.type==="error")
+     if(event.type==="response.failed"||event.type==="response.incomplete"||event.type==="error"){
+       const response=event.response as {error?:{code?:unknown}}|undefined;
+       const error=event.error as {code?:unknown}|undefined;
+       const code=error?.code??response?.error?.code??event.code;
+       // Match only a known code, never echo the supplier's message or input.
+       if(code==="subscription_sharing_usage_limit_exceeded")
+         throw new LLMError("ChatGPT 订阅共享额度已达到上限，请查看套餐额度并在恢复后重试",429);
        throw new LLMError("ChatGPT 订阅请求未成功完成："+String(event.type));
+     }
      if(event.type==="response.completed"){
        completed=true;
        const response=event.response as {usage?:{input_tokens?:number;output_tokens?:number}}|undefined;

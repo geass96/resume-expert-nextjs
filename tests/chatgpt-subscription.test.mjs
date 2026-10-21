@@ -21,6 +21,17 @@ test("SIWC SSE: fragmented JSON events require response.completed",()=>{
   "data: "+JSON.stringify({type:"response.failed"})+"\n\n"
  ]),/未成功完成/);
 });
+test("SIWC quota errors are actionable without exposing supplier messages or private snippets",()=>{
+ const error={code:"subscription_sharing_usage_limit_exceeded",message:"SYNTHETIC_PRIVATE_SNIPPET"};
+ for(const event of [{type:"error",...error},{type:"error",error},{type:"response.failed",response:{error}}]){
+   assert.throws(()=>readSubscriptionEvents(["data: "+JSON.stringify(event)+"\n\n"]),err=>{
+     assert.match(err.message,/订阅共享额度已达到上限/);
+     assert(!err.message.includes("SYNTHETIC_PRIVATE_SNIPPET"));
+     assert.equal(err.status,429);
+     return true;
+   });
+ }
+});
 test("SIWC encrypted storage, stable host ID, refresh locking and disconnect",async()=>{
  const dir=mkdtempSync(join(tmpdir(),"siwc-qa-"));
  process.env.RESUME_DATA_DIR=dir;

@@ -157,8 +157,8 @@ Axure、Figma、SQL、Jira、Confluence、数据分析
 
   setAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
 
-  setAnalysisResult: (result, preserveDraft = false) => set((state) => ({
-    analysisResult: preserveDraft ? {
+  setAnalysisResult: (result, preserveDraft = true) => set((state) => ({
+    analysisResult: preserveDraft && state.draftResume ? {
       ...result,
       // Rebuilt suggestions are new proposals; old decisions remain an audit record.
       optimizedItems:result.optimizedItems.map(item=>({...item,id:`analysis:${crypto.randomUUID()}:${item.id}`})),

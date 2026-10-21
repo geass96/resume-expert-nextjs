@@ -99,7 +99,9 @@ export function saveRound(id: string, expectedRound: number, answer: string, fee
   const db = init(), time = new Date().toISOString();
   db.exec("BEGIN IMMEDIATE");
   try {
-    const row = db.prepare("SELECT * FROM interview_sessions WHERE id=?").get(id) as Record<string, unknown> | undefined;
+    // Recheck after inference, inside the write transaction: deletion may have
+    // completed while the model was generating feedback.
+    const row = db.prepare("SELECT * FROM interview_sessions WHERE id=? AND deleted_at IS NULL").get(id) as Record<string, unknown> | undefined;
     if (!row || row.status !== "active" || Number(row.round_count) + 1 !== expectedRound)
       throw Error("练习状态已变化，请刷新后重试");
     const finish = expectedRound === INTERVIEW_MAX_ROUNDS || !nextQuestion.trim();

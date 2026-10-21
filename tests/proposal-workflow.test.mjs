@@ -17,7 +17,7 @@ function analysis() {
 }
 
 test("rejecting an initial AI suggestion removes it from the exported draft at the chosen field", () => {
-  useResumeStore.getState().setAnalysisResult(analysis());
+  useResumeStore.getState().setAnalysisResult(analysis(),false);
   useResumeStore.getState().rejectProposal("opt-1", "summary");
   const state=useResumeStore.getState();
   assert.equal(state.draftResume.summary,"原始摘要");
@@ -29,7 +29,7 @@ test("rejecting an initial AI suggestion removes it from the exported draft at t
 test("rejection requires an explicit target and never guesses which matching text to change", () => {
   const result=analysis();
   result.finalResume.workExperience[0].bullets[0]="AI 建议摘要";
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   assert.equal(useResumeStore.getState().rejectProposal("opt-1"),false);
   assert.equal(useResumeStore.getState().proposalDecisions["opt-1"],undefined);
   useResumeStore.getState().rejectProposal("opt-1","summary");
@@ -39,7 +39,7 @@ test("rejection requires an explicit target and never guesses which matching tex
 test("accept then reject restores the previous text, while later manual edits survive rejection", () => {
   const result=analysis();
   result.finalResume.summary="已有人工摘要";
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
   useResumeStore.getState().rejectProposal("opt-1","summary");
   assert.equal(useResumeStore.getState().draftResume.summary,"已有人工摘要");
@@ -52,7 +52,7 @@ test("accept then reject restores the previous text, while later manual edits su
 test("a mismatching target is a conflict rather than a false rejected state", () => {
   const result=analysis();
   result.finalResume.summary="其他内容与 AI 建议摘要 的组合";
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   assert.equal(useResumeStore.getState().rejectProposal("opt-1","summary"),false);
   assert.equal(useResumeStore.getState().proposalDecisions["opt-1"],undefined);
   assert.equal(useResumeStore.getState().draftResume.summary,result.finalResume.summary);
@@ -62,7 +62,7 @@ test("overlapping proposals must be rejected in reverse order instead of silentl
   const result=analysis();
   result.finalResume.summary="原始摘要";
   result.optimizedItems.push({...result.optimizedItems[0],id:"opt-2",before:"AI 建议摘要",after:"第二条建议"});
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
   useResumeStore.getState().applyProposal("opt-2","summary","第二条建议");
   assert.equal(useResumeStore.getState().rejectProposal("opt-1","summary"),false,"A newer accepted change is a visible conflict");
@@ -78,7 +78,7 @@ test("overlapping proposals must be rejected in reverse order instead of silentl
 test("legacy rejected predecessors cause a conflict rather than reappearing on export",()=>{
   const result=analysis();
   result.optimizedItems.push({...result.optimizedItems[0],id:"opt-2",before:"AI 建议摘要",after:"第二条建议"});
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
   useResumeStore.getState().applyProposal("opt-2","summary","第二条建议");
   useResumeStore.setState({proposalDecisions:{...useResumeStore.getState().proposalDecisions,
@@ -92,7 +92,7 @@ test("undoing three stacked suggestions restores predecessor ownership at every 
   const result=analysis();result.finalResume.summary="原始摘要";
   result.optimizedItems.push({...result.optimizedItems[0],id:"opt-2",before:"AI 建议摘要",after:"第二条建议"},
     {...result.optimizedItems[0],id:"opt-3",before:"第二条建议",after:"第三条建议"});
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
   useResumeStore.getState().applyProposal("opt-2","summary","第二条建议");
   useResumeStore.getState().applyProposal("opt-3","summary","第三条建议");
@@ -106,7 +106,7 @@ test("undoing three stacked suggestions restores predecessor ownership at every 
 });
 
 test("reaccepting after manual editing starts a new undo baseline",()=>{
-  useResumeStore.getState().setAnalysisResult(analysis());
+  useResumeStore.getState().setAnalysisResult(analysis(),false);
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
   useResumeStore.getState().updateDraft("summary","新的人工摘要");
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
@@ -115,7 +115,7 @@ test("reaccepting after manual editing starts a new undo baseline",()=>{
 });
 
 test("style regeneration retains evidence and adoption history without inheriting reused AI IDs", () => {
-  useResumeStore.getState().setAnalysisResult(analysis());
+  useResumeStore.getState().setAnalysisResult(analysis(),false);
   useResumeStore.getState().setEvidenceNote("summary","已核实的来源与口径");
   useResumeStore.getState().applyProposal("opt-1","summary","AI 建议摘要");
   useResumeStore.getState().addBullet("follow-1","work:0","完成用户验证");
@@ -136,7 +136,7 @@ test("skills and core-capability suggestions have explicit editable rejection ta
   result.finalResume.coreSkills=["需求分析","未经确认的技能"];
   result.optimizedItems.push({id:"skills",section:"技能工具",before:"SQL",after:"SQL、AI工具",reason:"",riskWarning:""},
     {id:"core",section:"核心能力",before:"需求分析",after:"需求分析、未经确认的技能",reason:"",riskWarning:""});
-  useResumeStore.getState().setAnalysisResult(result);
+  useResumeStore.getState().setAnalysisResult(result,false);
   assert.equal(useResumeStore.getState().rejectProposal("skills","skillsAndTools"),true);
   assert.equal(useResumeStore.getState().rejectProposal("core","coreSkills"),true);
   assert.deepEqual(useResumeStore.getState().draftResume.skillsAndTools,["SQL"]);

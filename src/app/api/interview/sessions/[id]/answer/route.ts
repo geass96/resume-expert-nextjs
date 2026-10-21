@@ -49,7 +49,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
     return NextResponse.json({session:updated});
   }catch(error){
     if(error instanceof Error && error.message.includes("练习状态已变化"))
-      return NextResponse.json({error:"其他请求已完成此回合，请刷新"},{status:409});
+      return NextResponse.json({error:"练习已删除或状态已变化，本轮回答未保存，请刷新"},{status:409});
     return NextResponse.json({error:"本轮评价生成失败，尚未记录回答，请重试"},{status:502});
   }
 }
