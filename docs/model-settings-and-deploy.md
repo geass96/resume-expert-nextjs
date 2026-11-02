@@ -39,7 +39,19 @@ GitHub 仓库为公开 Fork。GitHub Actions 会执行类型检查、Lint、测�
 
 1. 核实 SSH 的独立部署账号与 sudoers 最小权限。推荐使用独立、不能交互登录的密钥，只允许执行预期部署命令；不要复用日常 SSH 私钥。
 2. 在 VPS 将 ops/deploy-release.sh 安装为 root 拥有的 /usr/local/sbin/resume-expert-release-deploy，模式 0755；检查脚本内容、属主、服务名及 /opt 路径。
-3. 为 GitHub Actions 创建独立 SSH 密钥，公钥写入目标用户的 authorized_keys，仅授予调用部署脚本所需的 sudo 权限。
+3. 为 GitHub Actions 创建独立 SSH 密钥，并在目标用户的 `authorized_keys` 里**钉死这个密钥能做的事**（甲级形状，见下）。
+
+   安装执行体后，把该公钥写进 `authorized_keys`，选项必须是：
+   ```
+   restrict,command="sudo -n /usr/local/sbin/resume-expert-release-deploy" ssh-ed25519 AAAA... github-resume-expert-actions
+   ```
+   并确认 `sudoers.d/` 里对应规则只放行这一个脚本：
+   ```
+   resume-deploy ALL=(root) NOPASSWD: /usr/local/sbin/resume-expert-release-deploy ""
+   ```
+   `command=` 与末尾的 `""` 一起，意味着密钥持有者**只能**触发这个脚本、且**不能传任何参数**。发布版本号与产物通过 stdin 传递（首行 JSON 头 `{"revision","sha256","size"}`，随后是归档字节），执行体自己校验这三项。
+
+   只写 `restrict` 而不写 `command=` 是较弱的形态：密钥持有者能登录拿到一个普通 shell（虽不能提权），本仓库 2026-11-02 之前就是那样。
 4. 在 GitHub Settings → Secrets and variables → Actions 中**只**添加 Repository Secrets（本仓库是公开 fork，variables 对任何人可读，因此主机与用户也放这里）：
    - RESUME_DEPLOY_SSH_KEY：独立部署私钥
    - RESUME_DEPLOY_KNOWN_HOSTS：通过可信渠道核验的 VPS SSH 主机公钥行，不能直接信任未经验证的 ssh-keyscan 输出

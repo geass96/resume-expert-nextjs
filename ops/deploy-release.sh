@@ -2,22 +2,59 @@
 set -Eeuo pipefail
 
 # Install once as /usr/local/sbin/resume-expert-release-deploy, root:root 0755.
-# Only an explicitly authorized sudo rule should permit invoking this script.
-SHA="${1:-}"
-[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid release SHA" >&2; exit 2; }
+# Invoked as a forced command from authorized_keys, so this script does all its
+# own input validation: the caller cannot choose an argument.
+#
+# Protocol: the first line of stdin is a JSON header
+#   {"revision":"<40 hex>","sha256":"<64 hex>","size":<bytes>}
+# followed by exactly that many bytes of the release tarball. The artifact is
+# staged in a root-owned directory, never left in /tmp for the caller to write.
+
+STATE=/var/lib/resume-expert-deploy
+MAX_BYTES=220000000
+
+fail() { echo "$*" >&2; exit 2; }
+
+[[ "$(id -u)" -eq 0 ]] || fail "Root deployment privileges required"
+
+install -d -m 0700 -o root -g root "$STATE"
+cleanup() { rm -f "$STATE/artifact.tar.gz" "$STATE/header.json"; }
+trap cleanup EXIT
+
+# read, not "$(sed 1p)": command substitution drains stdin to EOF and would
+# leave nothing for the artifact that follows the header line.
+IFS= read -r header || fail "Missing protocol header"
+[[ -n "$header" ]] || fail "Missing protocol header"
+
+SHA="$(printf '%s' "$header" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("revision",""))' 2>/dev/null)" || fail "Malformed header"
+DIGEST="$(printf '%s' "$header" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("sha256",""))' 2>/dev/null)" || fail "Malformed header"
+DECLARED="$(printf '%s' "$header" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("size",0))' 2>/dev/null)" || fail "Malformed header"
+
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail "Invalid release SHA"
+[[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]] || fail "Invalid digest"
+[[ "$DECLARED" =~ ^[0-9]+$ ]] || fail "Invalid size"
+[[ "$DECLARED" -gt 0 && "$DECLARED" -le "$MAX_BYTES" ]] || fail "Release size out of range"
+
+ARTIFACT="$STATE/artifact.tar.gz"
+head -c "$DECLARED" > "$ARTIFACT"
+# Reject a stream longer than declared, so a caller cannot append to the archive.
+if [[ -n "$(head -c 1)" ]]; then fail "Trailing bytes after artifact"; fi
+
+actual_size="$(stat -c %s "$ARTIFACT")"
+[[ "$actual_size" -eq "$DECLARED" ]] || fail "Truncated artifact ($actual_size of $DECLARED bytes)"
+actual_digest="$(sha256sum "$ARTIFACT" | cut -d' ' -f1)"
+[[ "$actual_digest" == "$DIGEST" ]] || fail "Digest mismatch"
+
 PREFIX="${SHA:0:12}"
 APP=/opt/resume-expert
-ARTIFACT="/tmp/resume-expert-release-${SHA}.tar.gz"
 RELEASE="$APP/releases/git-${PREFIX}"
 TARGET="$RELEASE/standalone"
 CURRENT="$APP/current"
 ENV_FILE=/etc/resume-expert.env
 BACKUP="/etc/resume-expert.env.before-${PREFIX}"
-[[ "$(id -u)" -eq 0 ]] || { echo "Root deployment privileges required" >&2; exit 2; }
-[[ -f "$ARTIFACT" && -s "$ARTIFACT" ]] || { echo "Release artifact missing" >&2; exit 2; }
-[[ "$(stat -c %s "$ARTIFACT")" -lt 220000000 ]] || { echo "Release too large" >&2; exit 2; }
+
 PREVIOUS="$(readlink -f "$CURRENT")"
-[[ "$PREVIOUS" == "$APP/releases/"*/standalone ]] || { echo "Unexpected previous release" >&2; exit 2; }
+[[ "$PREVIOUS" == "$APP/releases/"*/standalone ]] || fail "Unexpected previous release"
 
 echo "Backing up SQLite with online integrity verification"
 systemctl start resume-expert-history-backup.service
@@ -26,8 +63,7 @@ find /var/backups/resume-expert -maxdepth 1 -type f -name 'history-*.sqlite' -mm
 
 if [[ -d "$TARGET" ]]; then
   [[ "$(readlink -f "$CURRENT")" == "$TARGET" ]] && { echo "Already deployed"; exit 0; }
-  echo "Target release exists but is not active: refuse overwrite" >&2
-  exit 2
+  fail "Target release exists but is not active: refuse overwrite"
 fi
 install -d -m 0750 -o resume-expert -g resume-expert "$TARGET"
 tar --no-same-owner -xzf "$ARTIFACT" -C "$TARGET"
@@ -65,7 +101,6 @@ for i in $(seq 1 35); do
   if [[ "$response" == *"$SHA"* ]]; then
     echo "DEPLOY_OK $SHA"
     echo "PREVIOUS $PREVIOUS"
-    rm -f "$ARTIFACT"
     exit 0
   fi
   sleep 2

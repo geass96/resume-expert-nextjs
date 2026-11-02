@@ -71,5 +71,11 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
           SSH_ARGS=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -i "$HOME/.ssh/resume_deploy")
-          scp "${SSH_ARGS[@]}" release/resume-expert-arm64.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/tmp/resume-expert-release-$RELEASE_SHA.tar.gz"
-          ssh "${SSH_ARGS[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "sudo /usr/local/sbin/resume-expert-release-deploy '$RELEASE_SHA'"
+          ARTIFACT=release/resume-expert-arm64.tar.gz
+          SIZE=$(stat -c %s "$ARTIFACT")
+          DIGEST=$(sha256sum "$ARTIFACT" | cut -d' ' -f1)
+          HEADER=$(printf '{"revision":"%s","sha256":"%s","size":%s}' "$RELEASE_SHA" "$DIGEST" "$SIZE")
+          # Header then archive over stdin: the server side is a forced command
+          # that accepts no arguments, so the caller cannot choose one.
+          { printf '%s\n' "$HEADER"; cat "$ARTIFACT"; } | \
+            ssh "${SSH_ARGS[@]}" "$DEPLOY_USER@$DEPLOY_HOST"
