@@ -53,8 +53,8 @@ jobs:
           path: release
       - name: Transfer and activate release
         env:
-          DEPLOY_HOST: ${{ vars.RESUME_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.RESUME_DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.RESUME_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.RESUME_DEPLOY_USER }}
           DEPLOY_KEY: ${{ secrets.RESUME_DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.RESUME_DEPLOY_KNOWN_HOSTS }}
           RELEASE_SHA: ${{ github.sha }}

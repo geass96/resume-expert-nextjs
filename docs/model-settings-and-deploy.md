@@ -40,13 +40,13 @@ GitHub 仓库为公开 Fork。GitHub Actions 会执行类型检查、Lint、测�
 1. 核实 SSH 的独立部署账号与 sudoers 最小权限。推荐使用独立、不能交互登录的密钥，只允许执行预期部署命令；不要复用日常 SSH 私钥。
 2. 在 VPS 将 ops/deploy-release.sh 安装为 root 拥有的 /usr/local/sbin/resume-expert-release-deploy，模式 0755；检查脚本内容、属主、服务名及 /opt 路径。
 3. 为 GitHub Actions 创建独立 SSH 密钥，公钥写入目标用户的 authorized_keys，仅授予调用部署脚本所需的 sudo 权限。
-4. 在 GitHub Settings → Secrets and variables → Actions 中添加 Repository Secrets：
+4. 在 GitHub Settings → Secrets and variables → Actions 中**只**添加 Repository Secrets（本仓库是公开 fork，variables 对任何人可读，因此主机与用户也放这里）：
    - RESUME_DEPLOY_SSH_KEY：独立部署私钥
    - RESUME_DEPLOY_KNOWN_HOSTS：通过可信渠道核验的 VPS SSH 主机公钥行，不能直接信任未经验证的 ssh-keyscan 输出
-5. 添加 Repository Variables：
-   - RESUME_DEPLOY_HOST：VPS 域名或地址
-   - RESUME_DEPLOY_USER：专用部署用户
-   - RESUME_AUTO_DEPLOY：首次受控部署验证完成前保持未启用
+   - RESUME_DEPLOY_HOST：源站域名或地址
+   - RESUME_DEPLOY_USER：专用部署用户（服务器上对应的受限账号）
+5. 添加 Repository Variable：
+   - RESUME_AUTO_DEPLOY：**首次受控部署验证完成前保持未启用**。它是唯一适合放 variables 的值，因为它不是凭据、也不是主机身份。
 6. 配置 production Environment 及必要的保护策略。启用后，push main 且 CI 成功会上传 ARM64 构建包，通过 SSH 部署；脚本先在线备份 SQLite，再切换发布目录并进行健康检查，失败时回滚应用代码。原数据库和环境配置不应被发布包覆盖。
 7. 首次启用前测试失败回滚、无权限 SSH 密钥、错误健康检查提交号和旧版本恢复。以上真实 VPS 操作未执行前，不得声称自动部署已启用。
 
