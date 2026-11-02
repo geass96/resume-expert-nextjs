@@ -116,7 +116,7 @@ try{
  chmodSync(tmp,0o600);
  renameSync(tmp,FILE);
  console.log("本机 OAuth 已成功验证并保存。没有输出访问令牌。");
- console.log("下一步按 docs/CHATGPT-SUBSCRIPTION.md 通过 SSH 安全导入 Oracle VPS。");
+ console.log("下一步按 docs/CHATGPT-SUBSCRIPTION.md 通过 SSH 安全导入自托管云主机。");
 }finally{
  clearTimeout(timer);
  server.close();

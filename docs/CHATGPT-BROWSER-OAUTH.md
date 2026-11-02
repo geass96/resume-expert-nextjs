@@ -2,7 +2,7 @@
 
 ## 用户使用流程
 
-1. 在个人 Windows 11 电脑上打开 https://resume-expert.geis.de5.net/ ，登录自己的简历专家账户。
+1. 在个人 Windows 11 电脑上打开 https://resume.example.com/ ，登录自己的简历专家账户。
 2. 进入「模型配置」→「ChatGPT Plus / Pro」→ 点击「连接 ChatGPT 订阅」。
 3. 页面打开运行在本机 127.0.0.1 的连接助手。点击「继续使用 ChatGPT 授权」，在 OpenAI 官方页面亲自登录、同意相应的 ChatGPT 订阅用量许可。
 4. 授权完成后本机助手自动通过 HTTPS 安全地把已经校验的授权资料发送给用户自己的 VPS。返回原网页等待连接状态显示已连接。
@@ -22,7 +22,7 @@
 
 ## 兼容性与限制
 
-- 这是私有 Windows + Oracle VPS 的方案，不是任意公网 Web 站点的一键登录。异地电脑若未安装本机连接助手，则无法使用此按钮。
+- 这是私有 Windows + 自托管云主机的方案，不是任意公网 Web 站点的一键登录。异地电脑若未安装本机连接助手，则无法使用此按钮。
 - OpenAI 对网页应用的 SIWC 接入仍有审核/试点限制。不得用服务端的 OAuth 授权码接收逻辑绕过这项限制。
 - 用户本人需在 OpenAI 授权页面明确同意套餐使用权限；代码和自动化测试无法代表用户完成真实同意。
 - OpenAI 官方如拒绝该场景的首次动态 OAuth 注册，必须尊重返回结果，不得将 Codex 私有令牌、ChatGPT Cookie 或未支持的网页接口冒充官方授权。
@@ -30,6 +30,7 @@
 ## 代码与运维
 
 - 本机辅助进程：scripts/siwc-browser-bridge.mjs；运行登录程序：scripts/siwc-login.mjs。
+- 本机辅助进程需要环境变量 `RESUME_PUBLIC_ORIGIN` 指向你自己的站点地址（例如 `https://resume.example.com`）；未设置时启动即报错退出。仓库内不保存生产域名。
 - VPS 接口：/api/chatgpt-subscription/pair（认证用户签发）、/api/chatgpt-subscription/pair/complete（使用一次性配对令牌，验证 OpenAI 凭据后保存）。
 - 关闭辅助进程：在 Windows 任务管理器结束该进程，并禁用任务计划程序中的 ResumeExpertOAuthBridge。
 - 旧的命令行 OAuth/SSH 导入作为离线备用方案保留在 scripts/siwc-login.mjs 和 scripts/siwc-import.mjs，但不再是网页中向最终用户展示的操作流程。

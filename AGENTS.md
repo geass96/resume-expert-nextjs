@@ -1,6 +1,6 @@
 # Resume Expert · Agent 开发规范
 
-本仓库为单用户使用的 AI 简历优化应用（Next.js / TypeScript），包含模型配置、ChatGPT 订阅 OAuth、本地及服务器端凭据、简历隐私数据和 Oracle VPS 生产部署。AI Agent 处理任务时先阅读相关 README、`docs/CHATGPT-SUBSCRIPTION.md`、现有测试和 `.github/workflows/checks.yml`，按用户验收条件做最小必要变更，不引入与当前任务无关的功能。
+本仓库为单用户使用的 AI 简历优化应用（Next.js / TypeScript），包含模型配置、ChatGPT 订阅 OAuth、本地及服务器端凭据、简历隐私数据和云主机生产部署。AI Agent 处理任务时先阅读相关 README、`docs/CHATGPT-SUBSCRIPTION.md`、现有测试和 `.github/workflows/checks.yml`，按用户验收条件做最小必要变更，不引入与当前任务无关的功能。
 
 ## 每次推送前的必检门禁
 

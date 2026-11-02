@@ -12,7 +12,7 @@
 
 1. 本机在项目目录执行以下命令，Node.js 24 必须已安装：
 
-    Set-Location D:\Codex\resume-expert-personal
+    Set-Location <项目目录>
     node scripts/siwc-login.mjs
 
 2. 程序启动临时本机回调并显示官方授权链接，你自己在系统浏览器打开 OpenAI URL、登录 Plus/Pro、阅读并明确批准订阅套餐使用许可。
@@ -20,9 +20,9 @@
 4. 确认已校验 VPS SSH 主机指纹，在 Windows PowerShell 执行下列命令，把 JSON 经过 SSH 标准输入发送到 VPS。凭据不会作为 SSH 命令参数出现：
 
     Get-Content "$HOME\.resume-expert\siwc-chatgpt.json" -Raw |
-      ssh -T ubuntu@137.131.20.193 "sudo /opt/resume-expert/bin/node --env-file=/etc/resume-expert.env /opt/resume-expert/current/scripts/siwc-import.mjs"
+      ssh -T <部署用户>@<VPS_IP> "sudo /opt/resume-expert/bin/node --env-file=/etc/resume-expert.env /opt/resume-expert/current/scripts/siwc-import.mjs"
 
-5. 访问 https://resume-expert.geis.de5.net/，打开「模型配置」→「ChatGPT Plus/Pro」，刷新连接状态、读取官方模型目录、选定并启用模型。
+5. 访问 https://resume.example.com/，打开「模型配置」→「ChatGPT Plus/Pro」，刷新连接状态、读取官方模型目录、选定并启用模型。
 
 ## 技术与安全
 

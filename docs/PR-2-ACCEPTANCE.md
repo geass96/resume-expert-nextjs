@@ -80,7 +80,7 @@
 最小复现（只读）：
 
 ```powershell
-curl.exe --noproxy '*' -skS --resolve resume-expert.geis.de5.net:443:137.131.20.193 https://resume-expert.geis.de5.net/api/health
+curl.exe --noproxy '*' -skS --resolve resume.example.com:443:<ORIGIN_IP> https://resume.example.com/api/health
 ```
 
 `-k` 仅用于这一次诊断：源站使用 Cloudflare Origin CA 服务器证书，本机通常不信任该证书。证书不受普通浏览器信任，不会阻止主动客户端连接；没有关闭系统或浏览器证书验证。
@@ -88,20 +88,20 @@ curl.exe --noproxy '*' -skS --resolve resume-expert.geis.de5.net:443:137.131.20.
 读取到的实际路径为：
 
 ```text
-普通访客 → Cloudflare → VPS 公网 443 → SNI 分流 → 127.0.0.1:8443 → 127.0.0.1:3101
+普通访客 → Cloudflare → 源站公网 443 → SNI 分流 → 反向代理回环端口 → 应用回环端口
 主动直连 → VPS IP + 正确 SNI/Host ────────────→ 相同站点 → 相同应用
 
-公网 443 的特定 www.cloudflare.com SNI → 127.0.0.1:1443（REALITY）
-其他 SNI                              → 127.0.0.1:8443（HTTPS 站点）
+公网 443 的特定 SNI → 同机另一服务的回环端口（不在本项目范围内）
+其他 SNI                              → 本项目的回环 HTTPS 站点
 ```
 
 具体证据：
 
-- 主机 `1PANEL_BASIC` 防火墙链允许所有来源 TCP 443、UDP 443、TCP 80，没有在该入口把简历站点限制为 Cloudflare 来源。成功直连也证明该次外部 IPv4 路径没有被云网络入口阻断。
+- 主机防火墙链允许所有来源 TCP 443、UDP 443、TCP 80，没有在该入口把简历站点限制为 Cloudflare 来源。成功直连也证明该次外部 IPv4 路径没有被云网络入口阻断。
 - OpenResty stream 配置只按 `$ssl_preread_server_name` 选择后端，`ssl_preread on` 不验证客户端来自 Cloudflare。正确 SNI 是公开域名信息。
-- `/opt/1panel/www/conf.d/resume-expert.conf` 中的 HTTPS server 监听 `127.0.0.1:8443 ssl`，代理到 `127.0.0.1:3101`，没有来源白名单或 `ssl_verify_client`。应用只监听回环地址也不能阻止反向代理接受公网直连。
+- 反向代理站点配置中的 HTTPS server 监听回环端口并终止 TLS，代理到应用的回环端口，没有来源白名单或 `ssl_verify_client`。应用只监听回环地址也不能阻止反向代理接受公网直连。
 - 源站证书签发者为 Cloudflare Origin SSL Certificate Authority。这是服务器身份和链路加密用途，不等于对 Cloudflare 回源客户端进行认证。
-- 443 stream 后端连接没有配置 PROXY protocol；8443 所见连接来源是回环代理。直接在 8443 使用现有 `$remote_addr` 套 Cloudflare IP 白名单会判断错误，不能把这一改动当成可直接上线的修复。
+- 443 stream 后端连接没有配置 PROXY protocol；回环 HTTPS 站点所见连接来源是回环代理。直接在站点端口使用现有 `$remote_addr` 套 Cloudflare IP 白名单会判断错误，不能把这一改动当成可直接上线的修复。
 
 Cloudflare 的 DNS/橙云决定正常 DNS 查询与访问经过代理，不会自动改写你的 VPS 防火墙，或关闭已知源 IP 的直接访问路径。见 [Cloudflare DNS 工作方式](https://developers.cloudflare.com/fundamentals/concepts/how-cloudflare-works/) 与 [回源认证原理](https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull/explanation/)。没有登录 Cloudflare 控制台，不声称已经核查控制台中的全部规则。
 
@@ -109,7 +109,7 @@ Cloudflare 的 DNS/橙云决定正常 DNS 查询与访问经过代理，不会�
 
 1. 审阅本 PR 最终提交及 CI。隔离真实链路已完成，生产登录后的 UI 回归仍需在受控发布后执行；不能将隔离验收等同于生产全链路通过。
 2. 针对简历 HTTPS server 评估并配置 Authenticated Origin Pulls（客户端证书校验），或设计能正确保留源地址的站点专用入口。AOP 需要 Cloudflare 与源站两端协同；控制台权限、功能可用性和回滚路径需在实施时确认。
-3. 不对整机 TCP 443 设置 Cloudflare-only 白名单，避免阻断 REALITY；不在现有回环代理链上凭可伪造请求头做来源认证。实施后分别验收域名访问成功、源站直连拒绝和 REALITY 客户端连接。
+3. 不对整机 TCP 443 设置 Cloudflare-only 白名单，避免阻断同机另一服务；不在现有回环代理链上凭可伪造请求头做来源认证。实施后分别验收域名访问成功、源站直连拒绝和该另一服务的客户端连接。
 4. 备份恢复与发布回滚演练、导出与明确定稿版本的绑定仍未处理。PDF/Word 解析和正式导出继续延期。
 
-本次只分析入口，没有更改 Cloudflare DNS、OCI、iptables、OpenResty 或 REALITY 配置。
+本次只分析入口，没有更改 Cloudflare DNS、云平台、iptables、反向代理或该另一服务的配置。

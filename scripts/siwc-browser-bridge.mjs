@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 
 const PORT=46729;
 const BIND="127.0.0.1";
-const SITE="https://resume-expert.geis.de5.net";
+const SITE=(process.env.RESUME_PUBLIC_ORIGIN||"").replace(/\/+$/,"");
+if(!SITE)throw new Error("请先设置 RESUME_PUBLIC_ORIGIN 为你的站点地址（例如 https://resume.example.com）");
 const LOGIN=join(dirname(fileURLToPath(import.meta.url)),"siwc-login.mjs");
 const CREDS=join(homedir(),".resume-expert","siwc-chatgpt.json");
 let active=null;

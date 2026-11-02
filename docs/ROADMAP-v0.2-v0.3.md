@@ -4,7 +4,7 @@
 - 适用项目：gaoweiblue-source/resume-expert（Next.js App Router）
 - 维护目标：geass96/resume-expert-nextjs（上游 GitHub Fork，不覆盖 geass96/resume-expert）
 - 现有上游版本：0.1.0；上游提交：0cb249a000ed3064cfb7c0f262722a1bc934d967
-- 现有 VPS 部署：Next.js 16.4.1，独立服务和入口 https://resume-expert.geis.de5.net/
+- 现有 VPS 部署：Next.js 16.4.1，独立服务和入口 https://resume.example.com/
 - 发布策略：v0.2.0 是下一版；v0.3.0 是第二版。全部仅面向单人桌面浏览器，无手机端任务。
 
 ## 0. 决策边界
@@ -74,7 +74,7 @@
 
 ### 1.5 数据持久化技术设计
 
-建议使用已部署 Oracle VPS 的 SQLite，而不是仅用 Zustand 或 localStorage 存档：
+建议使用已部署云主机的 SQLite，而不是仅用 Zustand 或 localStorage 存档：
 - 文件存放在独立持久化路径 /opt/resume-expert/data/resume-expert.sqlite，禁止放在 releases 中。
 - WAL 模式、定期一致性检查、在线快照备份与恢复演练。
 - 全部数据属于单人账户，但服务器访问仍必须鉴权；API 只允许可信会话写入。
@@ -185,5 +185,5 @@ B5. 用户修订简历后，新面试使用新版本，旧练习记录仍可回�
 - 原仓库：gaoweiblue-source/resume-expert；只读 upstream。
 - 个人 Fork：geass96/resume-expert-nextjs；本设计作为 docs/ROADMAP-v0.2-v0.3.md。
 - 已存在的 geass96/resume-expert 私有 Vite 项目完全保持不变。
-- 本次任务只完成方案设计、Fork、设计文档提交；不立即改变 https://resume-expert.geis.de5.net/ 的运行代码。
+- 本次任务只完成方案设计、Fork、设计文档提交；不立即改变 https://resume.example.com/ 的运行代码。
 - v0.2.0 功能研发时单独提交，并经 CI、备份、发布与版本健康验证后再上线。

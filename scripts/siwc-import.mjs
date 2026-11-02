@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Run ONLY on the owner's Oracle VPS, with RESUME_DATA_DIR and encryption env configured.
+// Run ONLY on the owner's self-hosted cloud host, with RESUME_DATA_DIR and encryption env configured.
 // Pipe protected OAuth JSON through SSH stdin; never put tokens in command arguments or logs.
 import { createCipheriv, createHash, createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";

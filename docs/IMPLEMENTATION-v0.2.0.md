@@ -5,7 +5,7 @@
 ## 关键安全配置
 
 私有环境变量应由 systemd EnvironmentFile 注入，必须在 Git 工作区之外。不要写入 .env.example：
-- RESUME_PUBLIC_ORIGIN=https://resume-expert.geis.de5.net
+- RESUME_PUBLIC_ORIGIN=https://resume.example.com
 - RESUME_DATA_DIR=/opt/resume-expert/shared
 - RESUME_PASSWORD_SALT=随机字符串
 - RESUME_PASSWORD_HASH=scrypt(密码,salt,32).hex()
